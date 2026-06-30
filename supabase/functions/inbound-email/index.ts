@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
       item_name: extracted.item_name,
       order_date: orderDate,
       order_number: extracted.order_number,
+      order_total: extracted.order_total,
       return_deadline: returnDeadline,
       confidence: extracted.confidence,
       status: "pending",
@@ -179,6 +180,7 @@ Deno.serve(async (req) => {
       to: fromEmail,
       retailer: extracted.retailer,
       itemName: extracted.item_name,
+      orderTotal: extracted.order_total,
       returnDeadline,
       confirmUrl: `${APP_URL}/confirm/${purchase.id}?token=${purchase.confirm_token}`,
     });

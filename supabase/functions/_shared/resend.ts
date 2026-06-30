@@ -1,7 +1,4 @@
-// TODO: switch back to "Retsy <reminders@retsy.xyz>" once retsy.xyz is
-// registered and verified in Resend. Until then, onboarding@resend.dev only
-// delivers to the email address on the Resend account itself.
-const FROM_ADDRESS = "Retsy <onboarding@resend.dev>";
+const FROM_ADDRESS = "Retsy <hello@contact.retsy.xyz>";
 
 async function sendEmail(to: string, subject: string, html: string) {
   const apiKey = Deno.env.get("RESEND_API_KEY");
@@ -55,16 +52,18 @@ export async function sendConfirmationEmail(opts: {
   to: string;
   retailer: string;
   itemName: string;
+  orderTotal: string | null;
   returnDeadline: string;
   confirmUrl: string;
 }) {
-  const { to, retailer, itemName, returnDeadline, confirmUrl } = opts;
+  const { to, retailer, itemName, orderTotal, returnDeadline, confirmUrl } = opts;
   const html = baseLayout(`
     <h1 style="font-size: 20px; margin: 0 0 16px;">We found a purchase — is this right?</h1>
     <p style="font-size: 15px; line-height: 1.5;">We read the receipt you forwarded and pulled out these details:</p>
     <table style="width: 100%; font-size: 14px; margin: 16px 0; border-collapse: collapse;">
       <tr><td style="padding: 6px 0; color: #777;">Retailer</td><td style="padding: 6px 0; font-weight: 600;">${retailer}</td></tr>
       <tr><td style="padding: 6px 0; color: #777;">Item</td><td style="padding: 6px 0; font-weight: 600;">${itemName}</td></tr>
+      ${orderTotal ? `<tr><td style="padding: 6px 0; color: #777;">Order total</td><td style="padding: 6px 0; font-weight: 600;">${orderTotal}</td></tr>` : ""}
       <tr><td style="padding: 6px 0; color: #777;">Estimated return deadline</td><td style="padding: 6px 0; font-weight: 600;">${formatDate(returnDeadline)}</td></tr>
     </table>
     <a href="${confirmUrl}" style="display: inline-block; background: #1a1a1a; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; margin-top: 8px;">Review &amp; confirm</a>

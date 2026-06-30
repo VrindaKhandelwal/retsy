@@ -6,6 +6,7 @@ export interface Purchase {
   item_name: string;
   order_date: string | null;
   order_number: string | null;
+  order_total: string | null;
   return_deadline: string;
   confidence: number;
   status: PurchaseStatus;

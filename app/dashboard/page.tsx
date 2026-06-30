@@ -242,6 +242,9 @@ function PurchaseCard({
           "en-US",
           { month: "short", day: "numeric", year: "numeric" }
         )}
+        {purchase.order_total && (
+          <span className="ml-3">· {purchase.order_total}</span>
+        )}
       </div>
 
       {needsConfirmation && (
