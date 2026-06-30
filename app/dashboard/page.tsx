@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { listPurchases, updateStatus, signup } from "@/lib/api";
 import type { Purchase } from "@/lib/types";
@@ -19,7 +19,7 @@ function urgencyStyles(days: number) {
   return { text: "text-sage", bg: "bg-sage/10", label: `${days} days left` };
 }
 
-export default function DashboardPage() {
+function DashboardPageInner() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
   const token = searchParams.get("token") || "";
@@ -29,6 +29,14 @@ export default function DashboardPage() {
   }
 
   return <Dashboard email={email} token={token} />;
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center px-6"><p className="text-inkSoft">Loading…</p></main>}>
+      <DashboardPageInner />
+    </Suspense>
+  );
 }
 
 function RequestLinkScreen() {
