@@ -11,6 +11,10 @@ export interface ExtractedPurchase {
   // Defaults to true when the model omits it, so the V1 forwarding flow
   // (where the user vouched for the email by forwarding it) is unaffected.
   is_returnable_purchase: boolean;
+  // Delivery notifications don't create purchases; gmail-sync uses them to
+  // set delivery_date on the matching purchase and recompute its deadline.
+  email_type: "order_confirmation" | "delivery_notification" | "other";
+  delivery_date: string | null; // ISO yyyy-mm-dd, delivery notifications only
 }
 
 const SYSTEM_PROMPT = `You extract structured purchase information from forwarded order
@@ -25,12 +29,21 @@ Return ONLY a JSON object with exactly these fields, nothing else:
   "order_number": string|null, // order/confirmation number as printed in the email. Null if not present.
   "order_total": string|null, // total amount paid for the order, as printed (e.g. "$45.99", "£32.00"). Null if not present.
   "confidence": number,      // your own confidence (0.0 to 1.0) that the above fields are correct and complete
-  "is_returnable_purchase": boolean // see rules below
+  "is_returnable_purchase": boolean, // see rules below
+  "email_type": string,      // "order_confirmation" | "delivery_notification" | "other" — see rules below
+  "delivery_date": string|null // ISO 8601 date (YYYY-MM-DD) the package was delivered, ONLY for delivery notifications. Null otherwise or if not stated.
 }
 
+email_type rules:
+- "order_confirmation": a purchase/order confirmation or receipt.
+- "delivery_notification": a shipping-carrier or retailer email saying a package
+  WAS DELIVERED (not merely shipped or out for delivery). Extract the retailer,
+  order_number if present, and delivery_date (null if the exact date isn't stated).
+- "other": everything else — shipped/out-for-delivery updates, returns, refunds,
+  marketing, and anything that is neither of the above.
+
 is_returnable_purchase must be true ONLY when BOTH hold:
-1. The email is an order/purchase confirmation or receipt (NOT a shipping/delivery
-   update, return or refund confirmation, or marketing/promotional email).
+1. email_type is "order_confirmation".
 2. The purchase is physical merchandise that could plausibly be returned to the
    retailer (clothing, electronics, home goods, etc.).
 It must be false for purchases with no meaningful return window: restaurant and
@@ -110,5 +123,10 @@ export async function extractPurchaseFromEmail(
       typeof parsed.is_returnable_purchase === "boolean"
         ? parsed.is_returnable_purchase
         : true,
+    email_type:
+      parsed.email_type === "delivery_notification" || parsed.email_type === "other"
+        ? parsed.email_type
+        : "order_confirmation",
+    delivery_date: parsed.delivery_date || null,
   };
 }

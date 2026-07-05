@@ -31,17 +31,19 @@ export async function scheduleReminders(
     }))
     .filter((r) => new Date(r.send_at) > now);
 
-  if (rows.length === 0) {
-    return null;
-  }
-
   // Clear any previously scheduled (unsent) reminders for this purchase
-  // first, in case the deadline was edited and we're rescheduling.
+  // first, in case the deadline was edited and we're rescheduling — even
+  // when the new deadline leaves nothing to schedule, the old reminders
+  // point at a deadline that no longer exists.
   await supabase
     .from("reminders")
     .delete()
     .eq("purchase_id", purchaseId)
     .is("sent_at", null);
+
+  if (rows.length === 0) {
+    return null;
+  }
 
   const { error } = await supabase
     .from("reminders")

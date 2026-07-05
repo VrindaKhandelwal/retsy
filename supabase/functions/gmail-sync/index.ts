@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
 
   let scanned = 0;
   let added = 0;
+  let delivered = 0;
   let skipped = 0;
 
   for (const account of accounts ?? []) {
@@ -114,11 +115,16 @@ Deno.serve(async (req) => {
       // accounts only; Workspace inboxes would need a keyword query
       // (documented follow-up, not built in V2).
       const q = `category:purchases after:${afterEpoch}`;
-      const messageIds = await listMessageIds(
-        accessToken,
-        q,
-        isFirstSync ? MAX_MESSAGES_FIRST_SYNC : MAX_MESSAGES_PER_RUN
-      );
+      // Gmail returns newest-first; process oldest-first so an order
+      // confirmation is inserted before its own delivery notification
+      // when both arrive in the same batch.
+      const messageIds = (
+        await listMessageIds(
+          accessToken,
+          q,
+          isFirstSync ? MAX_MESSAGES_FIRST_SYNC : MAX_MESSAGES_PER_RUN
+        )
+      ).reverse();
       scanned += messageIds.length;
 
       // Filter out already-imported messages in one query.
@@ -147,6 +153,24 @@ Deno.serve(async (req) => {
             message.text,
             message.from
           );
+
+          // Delivery notifications don't create purchases — they update the
+          // matching purchase's deadline to count from delivery, which is
+          // how most retailers actually measure the return window.
+          if (extracted.email_type === "delivery_notification") {
+            const didUpdate = await applyDeliveryDate(
+              supabase,
+              account.user_id,
+              extracted,
+              message.dateHeader
+            );
+            if (didUpdate) {
+              delivered++;
+            } else {
+              skipped++;
+            }
+            continue;
+          }
 
           if (!extracted.is_returnable_purchase || extracted.confidence < MIN_CONFIDENCE) {
             skipped++;
@@ -254,6 +278,100 @@ Deno.serve(async (req) => {
     accounts: accounts?.length ?? 0,
     scanned,
     added,
+    delivered,
     skipped,
   });
 });
+
+// Match a delivery notification to an existing purchase and recompute its
+// return deadline from the delivery date. Match by order number first;
+// fall back to the user's most recent undelivered purchase from the same
+// retailer. Returns true if a purchase was updated.
+async function applyDeliveryDate(
+  supabase: any,
+  userId: string,
+  extracted: {
+    retailer: string;
+    order_number: string | null;
+    delivery_date: string | null;
+  },
+  messageDateHeader: string | null
+): Promise<boolean> {
+  let purchase: {
+    id: string;
+    retailer: string;
+    status: string;
+    order_date: string | null;
+  } | null = null;
+
+  if (extracted.order_number) {
+    const { data } = await supabase
+      .from("purchases")
+      .select("id, retailer, status, order_date")
+      .eq("user_id", userId)
+      .eq("order_number", extracted.order_number)
+      .in("status", ["pending", "confirmed"])
+      .limit(1);
+    purchase = data?.[0] ?? null;
+  }
+
+  if (!purchase && extracted.retailer && extracted.retailer !== "Unknown") {
+    const { data } = await supabase
+      .from("purchases")
+      .select("id, retailer, status, order_date")
+      .eq("user_id", userId)
+      .ilike("retailer", extracted.retailer)
+      .is("delivery_date", null)
+      .in("status", ["pending", "confirmed"])
+      .order("order_date", { ascending: false })
+      .limit(1);
+    purchase = data?.[0] ?? null;
+  }
+
+  if (!purchase) {
+    return false;
+  }
+
+  // Sanity-check the extracted delivery date: it can't be before the order
+  // was placed or meaningfully in the future. Extraction sometimes grabs an
+  // unrelated date from the email; the message's own Date header is the
+  // reliable fallback (delivery emails arrive on the delivery day).
+  const messageDate = messageDateHeader
+    ? toIsoDate(new Date(messageDateHeader))
+    : toIsoDate(new Date());
+  let deliveryDate = extracted.delivery_date || messageDate;
+  const tooEarly = purchase.order_date && deliveryDate < purchase.order_date;
+  const tooLate = deliveryDate > addDays(toIsoDate(new Date()), 2);
+  if (tooEarly || tooLate) {
+    deliveryDate = messageDate;
+  }
+  if (purchase.order_date && deliveryDate < purchase.order_date) {
+    // Even the email's own date predates the order — we matched the wrong
+    // purchase (retailer fallback). Leave it alone.
+    return false;
+  }
+
+  const { windowDays } = await getReturnWindowDays(supabase, purchase.retailer);
+  const newDeadline = addDays(deliveryDate, windowDays);
+
+  const { error } = await supabase
+    .from("purchases")
+    .update({
+      delivery_date: deliveryDate,
+      return_deadline: newDeadline,
+      deadline_basis: "delivery_date",
+    })
+    .eq("id", purchase.id);
+
+  if (error) {
+    console.error(`delivery update failed for purchase ${purchase.id}`, error);
+    return false;
+  }
+
+  // Pending (V1-forwarded, unconfirmed) purchases get reminders scheduled
+  // at confirm time from the updated deadline; only reschedule live ones.
+  if (purchase.status === "confirmed") {
+    await scheduleReminders(supabase, purchase.id, newDeadline);
+  }
+  return true;
+}

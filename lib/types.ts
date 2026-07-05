@@ -13,6 +13,8 @@ export interface Purchase {
   confidence: number;
   status: PurchaseStatus;
   source?: PurchaseSource;
+  delivery_date?: string | null;
+  deadline_basis?: "order_date" | "delivery_date";
   created_at?: string;
 }
 

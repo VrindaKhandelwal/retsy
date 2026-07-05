@@ -314,6 +314,15 @@ function PurchaseCard({
         {purchase.order_total && (
           <span className="ml-3">· {purchase.order_total}</span>
         )}
+        {purchase.deadline_basis === "delivery_date" && purchase.delivery_date && (
+          <span className="ml-3">
+            · delivered{" "}
+            {new Date(purchase.delivery_date + "T00:00:00").toLocaleDateString(
+              "en-US",
+              { month: "short", day: "numeric" }
+            )}
+          </span>
+        )}
       </div>
 
       {needsConfirmation && (
