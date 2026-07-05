@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
             message.from
           );
 
-          if (!extracted.is_order_confirmation || extracted.confidence < MIN_CONFIDENCE) {
+          if (!extracted.is_returnable_purchase || extracted.confidence < MIN_CONFIDENCE) {
             skipped++;
             continue;
           }

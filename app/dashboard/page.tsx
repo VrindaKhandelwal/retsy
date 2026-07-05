@@ -185,8 +185,9 @@ function Dashboard({
 
       {banner === "connected" && (
         <div className="mt-6 rounded-lg border border-sage/40 bg-sage/10 px-4 py-3 text-sm text-ink">
-          Gmail connected. We&apos;ll scan for receipts once a day — purchases
-          from the last 30 days will show up after the first scan.
+          Gmail connected. We&apos;re scanning your last 30 days of receipts
+          now — refresh in a minute to see them. After this, we check once a
+          day automatically.
         </div>
       )}
       {banner === "error" && (

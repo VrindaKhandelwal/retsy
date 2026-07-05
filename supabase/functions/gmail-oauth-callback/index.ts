@@ -99,6 +99,30 @@ Deno.serve(async (req) => {
       return redirect(dashboardUrl(user.email, user.dashboard_token, "error"));
     }
 
+    // Kick off the first sync immediately (30-day backfill) instead of
+    // waiting for the daily cron, so the dashboard populates right after
+    // connecting. waitUntil keeps the function alive past the redirect;
+    // the sync itself is idempotent so overlapping with cron is harmless.
+    const syncRequest = fetch(
+      `${Deno.env.get("SUPABASE_URL")}/functions/v1/gmail-sync`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-cron-secret": Deno.env.get("CRON_SECRET") ?? "",
+        },
+        body: "{}",
+      }
+    ).catch((e) => console.error("post-connect sync trigger failed", e));
+
+    // deno-lint-ignore no-explicit-any
+    const runtime = (globalThis as any).EdgeRuntime;
+    if (runtime?.waitUntil) {
+      runtime.waitUntil(syncRequest);
+    } else {
+      await syncRequest;
+    }
+
     return redirect(dashboardUrl(user.email, user.dashboard_token, "connected"));
   } catch (err) {
     console.error("oauth callback error", err);
