@@ -5,6 +5,10 @@ export interface ExtractedPurchase {
   order_number: string | null;
   order_total: string | null; // e.g. "$45.99" or null if not found
   confidence: number; // 0.0 - 1.0, model's own estimate of extraction quality
+  // False for shipping updates, refunds, marketing, etc. Defaults to true
+  // when the model omits it, so the V1 forwarding flow (where the user
+  // vouched for the email by forwarding it) is unaffected.
+  is_order_confirmation: boolean;
 }
 
 const SYSTEM_PROMPT = `You extract structured purchase information from forwarded order
@@ -18,7 +22,8 @@ Return ONLY a JSON object with exactly these fields, nothing else:
   "order_date": string|null, // ISO 8601 date (YYYY-MM-DD) the order was placed. Null if you cannot find one.
   "order_number": string|null, // order/confirmation number as printed in the email. Null if not present.
   "order_total": string|null, // total amount paid for the order, as printed (e.g. "$45.99", "£32.00"). Null if not present.
-  "confidence": number       // your own confidence (0.0 to 1.0) that the above fields are correct and complete
+  "confidence": number,      // your own confidence (0.0 to 1.0) that the above fields are correct and complete
+  "is_order_confirmation": boolean // true ONLY if this email is an order/purchase confirmation or receipt. False for shipping/delivery updates, return or refund confirmations, marketing/promotional emails, or anything else.
 }
 
 Rules:
@@ -89,5 +94,9 @@ export async function extractPurchaseFromEmail(
       typeof parsed.confidence === "number"
         ? Math.max(0, Math.min(1, parsed.confidence))
         : 0.4,
+    is_order_confirmation:
+      typeof parsed.is_order_confirmation === "boolean"
+        ? parsed.is_order_confirmation
+        : true,
   };
 }

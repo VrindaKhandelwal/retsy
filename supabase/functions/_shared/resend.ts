@@ -135,6 +135,52 @@ export async function sendDashboardLinkEmail(opts: {
   );
 }
 
+export async function sendGmailDigestEmail(opts: {
+  to: string;
+  purchases: {
+    retailer: string;
+    itemName: string;
+    orderTotal: string | null;
+    returnDeadline: string;
+  }[];
+  dashboardUrl: string;
+}) {
+  const { to, purchases, dashboardUrl } = opts;
+  const count = purchases.length;
+  const rows = purchases
+    .map(
+      (p) => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #f0ece5;">
+          <div style="font-weight: 600;">${p.itemName}</div>
+          <div style="font-size: 13px; color: #777;">${p.retailer}${p.orderTotal ? ` · ${p.orderTotal}` : ""}</div>
+        </td>
+        <td style="padding: 8px 0; border-bottom: 1px solid #f0ece5; text-align: right; font-size: 13px; white-space: nowrap;">
+          return by<br /><strong>${formatDate(p.returnDeadline)}</strong>
+        </td>
+      </tr>`
+    )
+    .join("");
+
+  const html = baseLayout(`
+    <h1 style="font-size: 20px; margin: 0 0 16px;">${count === 1 ? "We spotted a new purchase" : `We spotted ${count} new purchases`}</h1>
+    <p style="font-size: 15px; line-height: 1.5;">
+      From your connected Gmail inbox — reminders are already set for
+      ${count === 1 ? "its return deadline" : "each return deadline"}:
+    </p>
+    <table style="width: 100%; font-size: 14px; margin: 16px 0; border-collapse: collapse;">${rows}</table>
+    <a href="${dashboardUrl}" style="display: inline-block; background: #1a1a1a; color: #fff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; margin-top: 8px;">View in dashboard</a>
+    <p style="font-size: 13px; color: #888; margin-top: 20px;">Anything look off? You can edit or delete purchases from the dashboard.</p>
+  `);
+  return sendEmail(
+    to,
+    count === 1
+      ? `Tracked: ${purchases[0].itemName} from ${purchases[0].retailer}`
+      : `Tracked ${count} new purchases from your inbox`,
+    html
+  );
+}
+
 export async function sendParseFailureEmail(opts: { to: string }) {
   const html = baseLayout(`
     <h1 style="font-size: 20px; margin: 0 0 16px;">We couldn't read that receipt</h1>

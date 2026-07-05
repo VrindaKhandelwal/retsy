@@ -13,12 +13,7 @@
 
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
-
-function addDays(dateStr: string, days: number): Date {
-  const d = new Date(dateStr + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d;
-}
+import { scheduleReminders } from "../_shared/reminders.ts";
 
 async function loadPurchase(supabase: any, id: string, token: string) {
   const { data, error } = await supabase
@@ -101,47 +96,20 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Database error" }, 500);
     }
 
-    // Schedule reminders: 7/3/1 days before the (possibly edited) deadline.
-    // Skip any reminder whose send time has already passed so we don't
-    // immediately fire a backlog of emails for a deadline that's already close.
-    const deadline = updated.return_deadline as string;
-    const reminderPlan: { type: "7_day" | "3_day" | "1_day"; offset: number }[] = [
-      { type: "7_day", offset: -7 },
-      { type: "3_day", offset: -3 },
-      { type: "1_day", offset: -1 },
-    ];
+    // Schedule reminders against the (possibly edited) deadline. A failure
+    // is not fatal — the purchase is still confirmed; reminders can be
+    // backfilled. Surface a soft warning in the response.
+    const reminderError = await scheduleReminders(
+      supabase,
+      id,
+      updated.return_deadline as string
+    );
 
-    const now = new Date();
-    const rows = reminderPlan
-      .map((r) => ({
-        purchase_id: id,
-        reminder_type: r.type,
-        send_at: addDays(deadline, r.offset).toISOString(),
-      }))
-      .filter((r) => new Date(r.send_at) > now);
-
-    if (rows.length > 0) {
-      // Clear any previously scheduled (unsent) reminders for this purchase
-      // first, in case the user is re-confirming after editing the deadline.
-      await supabase
-        .from("reminders")
-        .delete()
-        .eq("purchase_id", id)
-        .is("sent_at", null);
-
-      const { error: reminderError } = await supabase
-        .from("reminders")
-        .upsert(rows, { onConflict: "purchase_id,reminder_type" });
-
-      if (reminderError) {
-        console.error("reminder insert error", reminderError);
-        // Not fatal — the purchase is still confirmed; reminders can be
-        // backfilled. Surface a soft warning in the response.
-        return jsonResponse({
-          purchase: updated,
-          warning: "Confirmed, but reminders failed to schedule.",
-        });
-      }
+    if (reminderError) {
+      return jsonResponse({
+        purchase: updated,
+        warning: "Confirmed, but reminders failed to schedule.",
+      });
     }
 
     return jsonResponse({ purchase: updated });

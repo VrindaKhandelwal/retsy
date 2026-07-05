@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { listPurchases, updateStatus, signup } from "@/lib/api";
-import type { Purchase } from "@/lib/types";
+import type { GmailAccount, Purchase } from "@/lib/types";
+import GmailConnect from "@/components/GmailConnect";
 
 function daysUntil(dateStr: string): number {
   const today = new Date();
@@ -23,12 +24,13 @@ function DashboardPageInner() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
   const token = searchParams.get("token") || "";
+  const gmailFlag = searchParams.get("gmail");
 
   if (!email || !token) {
     return <RequestLinkScreen />;
   }
 
-  return <Dashboard email={email} token={token} />;
+  return <Dashboard email={email} token={token} gmailFlag={gmailFlag} />;
 }
 
 export default function DashboardPage() {
@@ -96,8 +98,21 @@ function RequestLinkScreen() {
   );
 }
 
-function Dashboard({ email, token }: { email: string; token: string }) {
+function Dashboard({
+  email,
+  token,
+  gmailFlag,
+}: {
+  email: string;
+  token: string;
+  gmailFlag: string | null;
+}) {
+  const router = useRouter();
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
+  const [gmailAccount, setGmailAccount] = useState<GmailAccount | null>(null);
+  const [banner, setBanner] = useState<"connected" | "error" | null>(
+    gmailFlag === "connected" || gmailFlag === "error" ? gmailFlag : null
+  );
   const [loadError, setLoadError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -107,11 +122,20 @@ function Dashboard({ email, token }: { email: string; token: string }) {
       setLoadError(error || "Couldn't load your dashboard.");
     } else {
       setPurchases(data.purchases);
+      setGmailAccount(data.gmail_account ?? null);
     }
   }
 
   useEffect(() => {
     refresh();
+    // Strip the one-time ?gmail= flag from the URL, keeping the banner in
+    // state so it still shows.
+    if (gmailFlag) {
+      router.replace(
+        `/dashboard?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`,
+        { scroll: false }
+      );
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -159,13 +183,50 @@ function Dashboard({ email, token }: { email: string; token: string }) {
       </h1>
       <p className="mt-1 text-sm text-inkSoft">{email}</p>
 
+      {banner === "connected" && (
+        <div className="mt-6 rounded-lg border border-sage/40 bg-sage/10 px-4 py-3 text-sm text-ink">
+          Gmail connected. We&apos;ll scan for receipts once a day — purchases
+          from the last 30 days will show up after the first scan.
+        </div>
+      )}
+      {banner === "error" && (
+        <div className="mt-6 rounded-lg border border-stamp/40 bg-stamp/10 px-4 py-3 text-sm text-ink">
+          Couldn&apos;t connect Gmail — please try again.
+        </div>
+      )}
+
+      <GmailConnect
+        email={email}
+        token={token}
+        account={gmailAccount}
+        onDisconnected={() => setGmailAccount(null)}
+      />
+
       {active.length === 0 ? (
-        <div className="mt-10 rounded-lg border border-dashed border-line bg-white/60 px-6 py-10 text-center">
-          <p className="text-inkSoft">
-            Nothing tracked yet. Forward an order confirmation to{" "}
-            <strong className="text-ink">returns@retsy.xyz</strong> to
-            get started.
+        <div className="mt-8 rounded-lg border border-dashed border-line bg-white/60 px-6 py-8">
+          <p className="text-center font-medium text-ink">
+            Nothing tracked yet — two ways to get started:
           </p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-md border border-line bg-white px-4 py-4">
+              <div className="text-sm font-semibold text-ink">
+                Connect your Gmail
+              </div>
+              <p className="mt-1 text-sm text-inkSoft">
+                Automatic — we check your inbox once a day and track new
+                receipts for you. Read-only access.
+              </p>
+            </div>
+            <div className="rounded-md border border-line bg-white px-4 py-4">
+              <div className="text-sm font-semibold text-ink">
+                Forward receipts manually
+              </div>
+              <p className="mt-1 text-sm text-inkSoft">
+                Works with any inbox — forward order confirmations to{" "}
+                <strong className="text-ink">returns@retsy.xyz</strong>.
+              </p>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="mt-8 space-y-3">
@@ -219,6 +280,8 @@ function PurchaseCard({
   const days = daysUntil(purchase.return_deadline);
   const urgency = urgencyStyles(days);
   const needsConfirmation = purchase.status === "pending";
+  const fromGmail = purchase.source === "gmail";
+  const checkDetails = fromGmail && purchase.confidence < 0.7;
 
   return (
     <div className="rounded-lg border border-line bg-white px-5 py-4">
@@ -227,7 +290,12 @@ function PurchaseCard({
           <div className="font-display text-lg font-semibold text-ink">
             {purchase.item_name}
           </div>
-          <div className="text-sm text-inkSoft">{purchase.retailer}</div>
+          <div className="text-sm text-inkSoft">
+            {purchase.retailer}
+            <span className="ml-2 rounded-full border border-line px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-inkSoft">
+              {fromGmail ? "via Gmail" : "forwarded"}
+            </span>
+          </div>
         </div>
         <span
           className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${urgency.bg} ${urgency.text}`}
@@ -250,6 +318,12 @@ function PurchaseCard({
       {needsConfirmation && (
         <div className="mt-3 rounded-md bg-mustard/10 px-3 py-2 text-xs font-medium text-mustard">
           Awaiting your confirmation by email
+        </div>
+      )}
+
+      {checkDetails && (
+        <div className="mt-3 rounded-md bg-mustard/10 px-3 py-2 text-xs font-medium text-mustard">
+          Auto-detected from your inbox — worth double-checking the details
         </div>
       )}
 
