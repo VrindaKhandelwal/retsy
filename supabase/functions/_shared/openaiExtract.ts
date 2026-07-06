@@ -13,7 +13,13 @@ export interface ExtractedPurchase {
   is_returnable_purchase: boolean;
   // Delivery notifications don't create purchases; gmail-sync uses them to
   // set delivery_date on the matching purchase and recompute its deadline.
-  email_type: "order_confirmation" | "delivery_notification" | "other";
+  // Return notifications (return labels, refund confirmations) mark the
+  // matching purchase as returned.
+  email_type:
+    | "order_confirmation"
+    | "delivery_notification"
+    | "return_notification"
+    | "other";
   delivery_date: string | null; // ISO yyyy-mm-dd, delivery notifications only
 }
 
@@ -30,17 +36,22 @@ Return ONLY a JSON object with exactly these fields, nothing else:
   "order_total": string|null, // total amount paid for the order, as printed (e.g. "$45.99", "£32.00"). Null if not present.
   "confidence": number,      // your own confidence (0.0 to 1.0) that the above fields are correct and complete
   "is_returnable_purchase": boolean, // see rules below
-  "email_type": string,      // "order_confirmation" | "delivery_notification" | "other" — see rules below
+  "email_type": string,      // "order_confirmation" | "delivery_notification" | "return_notification" | "other" — see rules below
   "delivery_date": string|null // ISO 8601 date (YYYY-MM-DD) the package was delivered, ONLY for delivery notifications. Null otherwise or if not stated.
 }
 
 email_type rules:
-- "order_confirmation": a purchase/order confirmation or receipt.
+- "order_confirmation": a purchase/order confirmation or receipt for a NEW order.
+  Careful: return labels and refund emails often quote the order number, items,
+  and prices just like a receipt — they are NOT order confirmations.
 - "delivery_notification": a shipping-carrier or retailer email saying a package
   WAS DELIVERED (not merely shipped or out for delivery). Extract the retailer,
   order_number if present, and delivery_date (null if the exact date isn't stated).
-- "other": everything else — shipped/out-for-delivery updates, returns, refunds,
-  marketing, and anything that is neither of the above.
+- "return_notification": the user is RETURNING an item — return label issued
+  (USPS/QR code), return started/received confirmations, refund issued/processed.
+  Extract the retailer and order_number if present.
+- "other": everything else — shipped/out-for-delivery updates, marketing, and
+  anything that is none of the above.
 
 is_returnable_purchase must be true ONLY when BOTH hold:
 1. email_type is "order_confirmation".
@@ -124,7 +135,9 @@ export async function extractPurchaseFromEmail(
         ? parsed.is_returnable_purchase
         : true,
     email_type:
-      parsed.email_type === "delivery_notification" || parsed.email_type === "other"
+      parsed.email_type === "delivery_notification" ||
+      parsed.email_type === "return_notification" ||
+      parsed.email_type === "other"
         ? parsed.email_type
         : "order_confirmation",
     delivery_date: parsed.delivery_date || null,

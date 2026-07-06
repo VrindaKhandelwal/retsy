@@ -179,6 +179,16 @@ Deno.serve(async (req) => {
             continue;
           }
 
+          // Return labels / refund emails quote order details like receipts
+          // do, but they're not purchases. They also don't prove the return
+          // happened (a generated label may never be used), so we don't
+          // touch the matching purchase's status — the user marks it
+          // returned from the dashboard.
+          if (extracted.email_type === "return_notification") {
+            skipped++;
+            continue;
+          }
+
           if (!extracted.is_returnable_purchase || extracted.confidence < MIN_CONFIDENCE) {
             skipped++;
             continue;
