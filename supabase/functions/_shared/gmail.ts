@@ -126,23 +126,39 @@ export async function revokeToken(refreshToken: string): Promise<void> {
   }).catch((e) => console.error("token revoke failed", e));
 }
 
+// Paginates until maxResults ids are collected or the query is exhausted.
+// Newest first (Gmail's order).
 export async function listMessageIds(
   accessToken: string,
   q: string,
   maxResults: number
 ): Promise<string[]> {
-  const params = new URLSearchParams({ q, maxResults: String(maxResults) });
-  const res = await fetch(`${GMAIL_API_BASE}/messages?${params}`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const ids: string[] = [];
+  let pageToken: string | undefined;
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gmail messages.list failed (${res.status}): ${errText}`);
+  while (ids.length < maxResults) {
+    const params = new URLSearchParams({
+      q,
+      maxResults: String(Math.min(maxResults - ids.length, 100)),
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const res = await fetch(`${GMAIL_API_BASE}/messages?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Gmail messages.list failed (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    ids.push(...(data.messages ?? []).map((m: { id: string }) => m.id));
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
   }
 
-  const data = await res.json();
-  return (data.messages ?? []).map((m: { id: string }) => m.id);
+  return ids;
 }
 
 export interface GmailMessage {
@@ -150,6 +166,7 @@ export interface GmailMessage {
   from: string;
   subject: string;
   dateHeader: string | null;
+  internalDateMs: number; // Gmail's own received timestamp
   // "Subject: ...\nFrom: ...\n\n<body>" — the shape extractPurchaseFromEmail expects
   text: string;
 }
@@ -182,6 +199,7 @@ export async function getMessage(
     from,
     subject,
     dateHeader,
+    internalDateMs: Number(data.internalDate) || Date.now(),
     text: `Subject: ${subject}\nFrom: ${from}\n\n${body}`,
   };
 }

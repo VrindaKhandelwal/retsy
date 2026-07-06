@@ -27,8 +27,13 @@ const APP_URL = Deno.env.get("APP_URL") ?? "https://app.retsy.xyz";
 const CRON_SECRET = Deno.env.get("CRON_SECRET");
 
 const MAX_ACCOUNTS_PER_RUN = 20;
-const MAX_MESSAGES_PER_RUN = 25;
-const MAX_MESSAGES_FIRST_SYNC = 50;
+// Listing ids is cheap (one API unit per page); extraction is the expensive
+// part, so we list the whole window but process a bounded batch per run —
+// edge functions have a wall-clock limit. The watermark only advances once
+// the window is fully processed, so successive runs (or the daily cron)
+// chew through any backlog.
+const MAX_LIST_IDS = 500;
+const MAX_EXTRACTIONS_PER_RUN = 50;
 const MIN_CONFIDENCE = 0.5;
 // Re-scan a little behind the watermark so messages that arrived while the
 // previous run was in flight aren't missed; dedupe absorbs the overlap.
@@ -105,7 +110,6 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const isFirstSync = !account.last_synced_at;
       const since = account.last_synced_at
         ? new Date(new Date(account.last_synced_at).getTime() - WATERMARK_OVERLAP_MS)
         : new Date(Date.now() - 30 * 86_400_000);
@@ -119,11 +123,7 @@ Deno.serve(async (req) => {
       // confirmation is inserted before its own delivery notification
       // when both arrive in the same batch.
       const messageIds = (
-        await listMessageIds(
-          accessToken,
-          q,
-          isFirstSync ? MAX_MESSAGES_FIRST_SYNC : MAX_MESSAGES_PER_RUN
-        )
+        await listMessageIds(accessToken, q, MAX_LIST_IDS)
       ).reverse();
       scanned += messageIds.length;
 
@@ -139,16 +139,23 @@ Deno.serve(async (req) => {
         newIds = messageIds.filter((id) => !seenSet.has(id));
       }
 
+      // Bound the expensive part; if there's more than one batch left, the
+      // watermark stays put so the next run continues where this one ends.
+      const windowComplete = newIds.length <= MAX_EXTRACTIONS_PER_RUN;
+      newIds = newIds.slice(0, MAX_EXTRACTIONS_PER_RUN);
+
       const newPurchases: {
         retailer: string;
         itemName: string;
         orderTotal: string | null;
         returnDeadline: string;
       }[] = [];
+      let newestProcessedMs = 0;
 
       for (const messageId of newIds) {
         try {
           const message = await getMessage(accessToken, messageId);
+          newestProcessedMs = Math.max(newestProcessedMs, message.internalDateMs);
           const extracted = await extractPurchaseFromEmail(
             message.text,
             message.from
@@ -251,12 +258,20 @@ Deno.serve(async (req) => {
         }).catch((e) => console.error("digest email failed", e));
       }
 
-      // Advance the watermark to run start (not "now") so messages arriving
-      // mid-run land inside the next overlap window.
+      // Watermark: when the window is fully processed, advance to run start
+      // (not "now") so messages arriving mid-run land inside the next
+      // overlap window. On a partial (backlog) run, advance only to the
+      // newest message actually processed — we work oldest-first, so the
+      // next run picks up exactly where this one stopped.
+      const newWatermark = windowComplete
+        ? runStart
+        : newestProcessedMs > 0
+          ? new Date(newestProcessedMs)
+          : runStart;
       await supabase
         .from("gmail_accounts")
         .update({
-          last_synced_at: runStart.toISOString(),
+          last_synced_at: newWatermark.toISOString(),
           last_sync_error: null,
           updated_at: new Date().toISOString(),
         })
