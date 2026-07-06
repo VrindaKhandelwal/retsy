@@ -1,14 +1,24 @@
 // Edge Function: update-status
 //
-// POST { email, token, purchase_id, action: "returned" | "kept" | "delete" }
-//   -> validates the user's dashboard_token, then updates the purchase's
-//      status (or deletes it) and cancels any unsent reminders, since a
-//      returned/kept/deleted purchase no longer needs to be chased.
+// POST { email, token, purchase_id, action }
+//   action: "returned" | "kept" | "delete"      -> resolved; unsent
+//           reminders are cancelled since there's nothing left to chase.
+//           "to_return" | "undecided"           -> still open; reminders
+//           stay live (to_return is exactly the state where the deadline
+//           matters most). "undecided" moves a purchase back to confirmed.
 
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { scheduleReminders } from "../_shared/reminders.ts";
 
-type Action = "returned" | "kept" | "delete";
+type Action = "returned" | "kept" | "delete" | "to_return" | "undecided";
+
+const STATUS_BY_ACTION: Record<Exclude<Action, "delete">, string> = {
+  returned: "returned",
+  kept: "kept",
+  to_return: "to_return",
+  undecided: "confirmed",
+};
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -36,7 +46,7 @@ Deno.serve(async (req) => {
   if (!email || !token || !purchase_id || !action) {
     return jsonResponse({ error: "Missing required fields" }, 400);
   }
-  if (!["returned", "kept", "delete"].includes(action)) {
+  if (!["returned", "kept", "delete", "to_return", "undecided"].includes(action)) {
     return jsonResponse({ error: "Invalid action" }, 400);
   }
 
@@ -55,7 +65,7 @@ Deno.serve(async (req) => {
   // Confirm the purchase belongs to this user before touching it.
   const { data: purchase, error: purchaseError } = await supabase
     .from("purchases")
-    .select("id, user_id")
+    .select("id, user_id, status, return_deadline")
     .eq("id", purchase_id)
     .maybeSingle();
 
@@ -72,7 +82,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true });
   }
 
-  const newStatus = action === "returned" ? "returned" : "kept";
+  const newStatus = STATUS_BY_ACTION[action];
 
   const { error: updateError } = await supabase
     .from("purchases")
@@ -85,11 +95,18 @@ Deno.serve(async (req) => {
   }
 
   // No need to remind someone about a return they've already resolved.
-  await supabase
-    .from("reminders")
-    .delete()
-    .eq("purchase_id", purchase_id)
-    .is("sent_at", null);
+  // Open states (to_return / undecided) keep their reminders live — and
+  // when a purchase moves back from returned/kept, its reminders (deleted
+  // on resolve) are rescheduled.
+  if (action === "returned" || action === "kept") {
+    await supabase
+      .from("reminders")
+      .delete()
+      .eq("purchase_id", purchase_id)
+      .is("sent_at", null);
+  } else if (purchase.status === "returned" || purchase.status === "kept") {
+    await scheduleReminders(supabase, purchase_id, purchase.return_deadline);
+  }
 
   return jsonResponse({ ok: true });
 });

@@ -1,4 +1,11 @@
-export type PurchaseStatus = "pending" | "confirmed" | "returned" | "kept";
+// confirmed = tracked, undecided · to_return = wants to return, hasn't yet
+// "missed" is derived in the UI: an open purchase whose deadline passed.
+export type PurchaseStatus =
+  | "pending"
+  | "confirmed"
+  | "to_return"
+  | "returned"
+  | "kept";
 
 export type PurchaseSource = "forwarded" | "gmail";
 

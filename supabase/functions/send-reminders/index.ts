@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     )
     .is("sent_at", null)
     .lte("send_at", nowIso)
-    .eq("purchases.status", "confirmed")
+    .in("purchases.status", ["confirmed", "to_return"])
     .limit(200);
 
   if (error) {

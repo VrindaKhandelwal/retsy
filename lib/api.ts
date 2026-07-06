@@ -78,7 +78,7 @@ export function updateStatus(
   email: string,
   token: string,
   purchaseId: string,
-  action: "returned" | "kept" | "delete"
+  action: "returned" | "kept" | "delete" | "to_return" | "undecided"
 ) {
   return call<{ ok: true }>("update-status", {
     method: "POST",
