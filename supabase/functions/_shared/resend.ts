@@ -30,11 +30,11 @@ async function sendEmail(to: string, subject: string, html: string) {
 
 function baseLayout(bodyHtml: string) {
   return `
-  <div style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #1a1a1a;">
-    <div style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #9a8a78; font-weight: 600; margin-bottom: 24px;">Retsy</div>
+  <div style="font-family: -apple-system, Segoe UI, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #2e2530;">
+    <div style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #d94f7d; font-weight: 700; margin-bottom: 24px;">Retsy</div>
     ${bodyHtml}
-    <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #e8e2d8; font-size: 12px; color: #9a9a9a;">
-      You're receiving this because you forwarded an order email to returns@retsy.xyz.
+    <div style="margin-top: 40px; padding-top: 16px; border-top: 1px solid #f1e2e3; font-size: 12px; color: #9a8c92;">
+      You're receiving this because you use Retsy to track your returns.
     </div>
   </div>`;
 }
@@ -106,20 +106,27 @@ export async function sendDashboardLinkEmail(opts: {
 
   const html = isNewUser
     ? baseLayout(`
-    <h1 style="font-size: 22px; font-weight: 700; margin: 0 0 20px; line-height: 1.3;">Welcome to Retsy.</h1>
-    <p style="font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-      People lose over <strong>$60 billion</strong> in returnable purchases every year — not because they don't want their money back, but because the return window quietly closes before they remember.
+    <h1 style="font-size: 22px; font-weight: 700; margin: 0 0 16px; line-height: 1.3;">Welcome to Retsy.</h1>
+    <p style="font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
+      Retsy is your purchase manager: now that you've signed up, your purchases
+      are tracked automatically and every return window is watched for you.
     </p>
-    <p style="font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-      Retsy exists to fix that. Forward your receipts, and we'll watch the deadlines so you don't have to.
-    </p>
-    <div style="background: #f7f4f0; border-radius: 8px; padding: 20px 20px; margin-bottom: 24px;">
-      <p style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9a8a78; margin: 0 0 8px;">Where to forward your receipts</p>
-      <p style="font-size: 18px; font-weight: 700; color: #1a1a1a; margin: 0; letter-spacing: 0.01em;">returns@retsy.xyz</p>
-      <p style="font-size: 13px; color: #777; margin: 8px 0 0;">Forward any order confirmation email here. We'll read it, extract the details, and email you to confirm before setting reminders.</p>
-    </div>
-    <a href="${dashboardUrl}" style="display: inline-block; background: #1a1a1a; color: #fff; text-decoration: none; padding: 13px 22px; border-radius: 6px; font-size: 14px; font-weight: 600;">Open your dashboard</a>
-    <p style="font-size: 13px; color: #888; margin-top: 20px;">Bookmark that link — it's your personal dashboard and how you'll get back in.</p>
+    <table style="width: 100%; font-size: 14px; margin: 0 0 24px; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 8px 0; vertical-align: top; width: 24px; color: #d94f7d; font-weight: 700;">✓</td>
+        <td style="padding: 8px 0; line-height: 1.5;"><strong>Every purchase, tracked.</strong> Connect your Gmail from the dashboard and new order confirmations are picked up automatically — or forward any receipt to <strong>returns@retsy.xyz</strong>.</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; vertical-align: top; color: #d94f7d; font-weight: 700;">✓</td>
+        <td style="padding: 8px 0; line-height: 1.5;"><strong>Return windows, watched.</strong> Each purchase shows exactly how many days you have left to send it back, and whether you've decided to keep or return it.</td>
+      </tr>
+      <tr>
+        <td style="padding: 8px 0; vertical-align: top; color: #d94f7d; font-weight: 700;">✓</td>
+        <td style="padding: 8px 0; line-height: 1.5;"><strong>Reminders before it's too late.</strong> We email you 7, 3, and 1 day before each return deadline.</td>
+      </tr>
+    </table>
+    <a href="${dashboardUrl}" style="display: inline-block; background: #d94f7d; color: #fff; text-decoration: none; padding: 13px 22px; border-radius: 10px; font-size: 14px; font-weight: 700;">Open your dashboard</a>
+    <p style="font-size: 13px; color: #9a8c92; margin-top: 20px;">Bookmark that link — it's your personal dashboard and how you'll get back in.</p>
   `)
     : baseLayout(`
     <h1 style="font-size: 20px; margin: 0 0 16px;">Your dashboard link</h1>
