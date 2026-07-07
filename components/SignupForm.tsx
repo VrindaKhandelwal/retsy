@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { signup } from "@/lib/api";
 
+const SANS = "'Manrope', system-ui, sans-serif";
+
+// Email-capture pill from the Landing Page design export, wired to the
+// real signup function (which emails the user their dashboard link).
 export default function SignupForm() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
-    "idle"
-  );
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -25,17 +27,24 @@ export default function SignupForm() {
 
   if (status === "done") {
     return (
-      <div className="rounded-lg border border-sage/40 bg-sage/10 px-5 py-4 text-sm text-ink">
-        <span className="font-semibold">Check your inbox.</span> We sent a
-        link to your dashboard — and the address to forward receipts to.
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #eafaf0", borderRadius: 16, padding: "16px 22px", boxShadow: "0 14px 30px rgba(203,150,165,0.14)", width: "100%", maxWidth: 440, textAlign: "left" }}>
+        <span style={{ width: 22, height: 22, borderRadius: "50%", background: "#e8f4ee", color: "#5fb897", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>
+          ✓
+        </span>
+        <span style={{ fontSize: 14.5, fontWeight: 600 }}>
+          Check your inbox — we sent your dashboard link to {email}.
+        </span>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row sm:items-start">
-      <div className="flex-1">
-        <label htmlFor="email" className="sr-only">
+    <div style={{ width: "100%", maxWidth: 440 }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "flex", alignItems: "center", gap: 10, background: "#fff", border: "1px solid #f1e2e3", borderRadius: 16, padding: 8, boxShadow: "0 14px 30px rgba(203,150,165,0.14)", width: "100%" }}
+      >
+        <label htmlFor="email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
           Email address
         </label>
         <input
@@ -45,19 +54,19 @@ export default function SignupForm() {
           placeholder="you@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-md border border-line bg-white/70 px-4 py-3 text-base text-ink placeholder:text-inkSoft/60 focus:border-ink focus:outline-none"
+          style={{ flex: 1, minWidth: 0, border: "none", background: "transparent", fontFamily: SANS, fontSize: 15, padding: "10px 12px", color: "#2e2530", outline: "none" }}
         />
-        {status === "error" && (
-          <p className="mt-2 text-sm text-stamp">{errorMsg}</p>
-        )}
-      </div>
-      <button
-        type="submit"
-        disabled={status === "loading"}
-        className="rounded-md bg-ink px-6 py-3 text-base font-semibold text-paper transition hover:bg-ink/90 disabled:opacity-60"
-      >
-        {status === "loading" ? "Sending…" : "Get started"}
-      </button>
-    </form>
+        <button
+          type="submit"
+          disabled={status === "loading"}
+          style={{ flexShrink: 0, border: "none", background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontFamily: SANS, fontSize: 14, fontWeight: 700, padding: "12px 22px", borderRadius: 11, cursor: "pointer", boxShadow: "0 8px 20px rgba(217,79,125,0.3)", opacity: status === "loading" ? 0.6 : 1 }}
+        >
+          {status === "loading" ? "Sending…" : "Get early access"}
+        </button>
+      </form>
+      {status === "error" && (
+        <p style={{ marginTop: 10, fontSize: 13, color: "#d94f7d", textAlign: "left" }}>{errorMsg}</p>
+      )}
+    </div>
   );
 }
