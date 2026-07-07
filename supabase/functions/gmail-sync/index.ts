@@ -49,6 +49,11 @@ function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// A large backlog (e.g. first connect on a busy inbox) takes several runs
+// at MAX_EXTRACTIONS_PER_RUN each. Rather than waiting a day per batch on
+// the cron, a partial run re-triggers itself, up to this many chained runs.
+const MAX_CHAIN = 10;
+
 Deno.serve(async (req) => {
   if (CRON_SECRET) {
     const url = new URL(req.url);
@@ -57,6 +62,14 @@ Deno.serve(async (req) => {
     if (provided !== CRON_SECRET) {
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
+  }
+
+  let chain = 0;
+  try {
+    const body = await req.json();
+    chain = Number(body?.chain) || 0;
+  } catch {
+    // empty body is fine
   }
 
   const supabase = getSupabaseAdmin();
@@ -76,6 +89,7 @@ Deno.serve(async (req) => {
   let added = 0;
   let delivered = 0;
   let skipped = 0;
+  let hasBacklog = false;
 
   for (const account of accounts ?? []) {
     const runStart = new Date();
@@ -142,6 +156,7 @@ Deno.serve(async (req) => {
       // Bound the expensive part; if there's more than one batch left, the
       // watermark stays put so the next run continues where this one ends.
       const windowComplete = newIds.length <= MAX_EXTRACTIONS_PER_RUN;
+      if (!windowComplete) hasBacklog = true;
       newIds = newIds.slice(0, MAX_EXTRACTIONS_PER_RUN);
 
       const newPurchases: {
@@ -298,6 +313,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Chain another run if any account still has unprocessed backlog.
+  if (hasBacklog && chain < MAX_CHAIN) {
+    const next = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/gmail-sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-cron-secret": CRON_SECRET ?? "",
+      },
+      body: JSON.stringify({ chain: chain + 1 }),
+    }).catch((e) => console.error("sync chain trigger failed", e));
+
+    // deno-lint-ignore no-explicit-any
+    const runtime = (globalThis as any).EdgeRuntime;
+    if (runtime?.waitUntil) {
+      runtime.waitUntil(next);
+    }
+  }
+
   return jsonResponse({
     ok: true,
     accounts: accounts?.length ?? 0,
@@ -305,6 +338,8 @@ Deno.serve(async (req) => {
     added,
     delivered,
     skipped,
+    backlog: hasBacklog,
+    chain,
   });
 });
 
