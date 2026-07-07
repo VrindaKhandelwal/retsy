@@ -1,12 +1,16 @@
-// Edge Function: list-purchases
+// Edge Function: gmail-oauth-start
 //
 // GET ?email=<email>&token=<dashboard_token>
-//   -> returns all purchases for that user, newest deadline first, for the
-//      dashboard page. The dashboard_token (mailed to the user) stands in
-//      for a login session in V1.
+//   -> validates the dashboard token, creates a one-time OAuth state row,
+//      and 302-redirects to Google's consent screen.
+//
+// The browser navigates here directly (window.location), so the response
+// is a redirect, not JSON. The state row keeps the dashboard token out of
+// Google's redirect URLs.
 
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
+import { buildAuthUrl } from "../_shared/gmail.ts";
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -36,26 +40,19 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Invalid link" }, 401);
   }
 
-  const { data: purchases, error: purchasesError } = await supabase
-    .from("purchases")
-    .select(
-      "id, retailer, item_name, order_date, order_number, order_total, return_deadline, confidence, status, source, delivery_date, deadline_basis, created_at"
-    )
-    .eq("user_id", user.id)
-    .order("return_deadline", { ascending: true });
+  const { data: stateRow, error: stateError } = await supabase
+    .from("gmail_oauth_states")
+    .insert({ user_id: user.id })
+    .select("state")
+    .single();
 
-  if (purchasesError) {
-    console.error("purchases lookup error", purchasesError);
+  if (stateError) {
+    console.error("oauth state insert error", stateError);
     return jsonResponse({ error: "Database error" }, 500);
   }
 
-  // Gmail connection status for the dashboard (V2). Additive — older
-  // clients just ignore the extra field.
-  const { data: gmailAccount } = await supabase
-    .from("gmail_accounts")
-    .select("google_email, status, last_synced_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return jsonResponse({ purchases, gmail_account: gmailAccount ?? null });
+  return new Response(null, {
+    status: 302,
+    headers: { Location: buildAuthUrl(stateRow.state) },
+  });
 });

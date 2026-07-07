@@ -406,6 +406,18 @@ verify_jwt = false
 [functions.send-reminders]
 verify_jwt = false
 
+[functions.gmail-oauth-start]
+verify_jwt = false
+
+[functions.gmail-oauth-callback]
+verify_jwt = false
+
+[functions.gmail-sync]
+verify_jwt = false
+
+[functions.gmail-disconnect]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 54327

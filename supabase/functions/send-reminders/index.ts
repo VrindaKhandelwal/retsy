@@ -52,13 +52,13 @@ Deno.serve(async (req) => {
         return_deadline,
         status,
         user_id,
-        users!inner ( email )
+        users!inner ( email, dashboard_token )
       )
     `
     )
     .is("sent_at", null)
     .lte("send_at", nowIso)
-    .eq("purchases.status", "confirmed")
+    .in("purchases.status", ["confirmed", "to_return"])
     .limit(200);
 
   if (error) {
@@ -77,6 +77,10 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // Tokenized link — the dashboard has no login, so a bare /dashboard
+    // would strand the user on the "find your dashboard" screen.
+    const dashboardUrl = `${APP_URL}/dashboard?email=${encodeURIComponent(userEmail)}&token=${encodeURIComponent(purchase.users.dashboard_token)}`;
+
     try {
       await sendReminderEmail({
         to: userEmail,
@@ -84,7 +88,7 @@ Deno.serve(async (req) => {
         itemName: purchase.item_name,
         returnDeadline: purchase.return_deadline,
         daysLeft: DAYS_LEFT_BY_TYPE[reminder.reminder_type] ?? 1,
-        dashboardUrl: `${APP_URL}/dashboard`,
+        dashboardUrl,
       });
 
       await supabase

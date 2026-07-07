@@ -56,16 +56,29 @@ export function confirmPurchase(
 }
 
 export function listPurchases(email: string, token: string) {
-  return call<{ purchases: any[] }>(
+  return call<{ purchases: any[]; gmail_account: any | null }>(
     `list-purchases?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
   );
+}
+
+// Used as a navigation target (window.location), not a fetch — the function
+// responds with a 302 to Google's consent screen.
+export function gmailConnectUrl(email: string, token: string) {
+  return `${FUNCTIONS_URL}/gmail-oauth-start?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
+}
+
+export function gmailDisconnect(email: string, token: string) {
+  return call<{ ok: true }>("gmail-disconnect", {
+    method: "POST",
+    body: JSON.stringify({ email, token }),
+  });
 }
 
 export function updateStatus(
   email: string,
   token: string,
   purchaseId: string,
-  action: "returned" | "kept" | "delete"
+  action: "returned" | "kept" | "delete" | "to_return" | "undecided"
 ) {
   return call<{ ok: true }>("update-status", {
     method: "POST",
