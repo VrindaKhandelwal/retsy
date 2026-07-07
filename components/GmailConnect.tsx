@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Mail } from "lucide-react";
 import { gmailConnectUrl, gmailDisconnect } from "@/lib/api";
 import type { GmailAccount } from "@/lib/types";
 
+// Compact card styled for the dashboard sidebar (blush palette from the
+// Claude Design export).
 export default function GmailConnect({
   email,
   token,
@@ -31,24 +32,18 @@ export default function GmailConnect({
 
   if (!account) {
     return (
-      <div className="rounded-xl border border-stone-200 bg-white px-5 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
-              <Mail size={14} /> Connect your Gmail
-            </div>
-            <p className="mt-1 text-sm text-stone-500">
-              We&apos;ll check your inbox once a day for new receipts and track
-              them automatically. Read-only access — we only look for order
-              confirmations.
-            </p>
-          </div>
-          <button
-            onClick={connect}
-            className="whitespace-nowrap rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
-          >
-            Connect Gmail
-          </button>
+      <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 16, padding: 15 }}>
+        <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 15, lineHeight: 1.25, marginBottom: 4 }}>
+          Connect your Gmail
+        </div>
+        <div style={{ fontSize: 12, color: "#9a8c92", lineHeight: 1.4, marginBottom: 12 }}>
+          We&apos;ll spot new receipts once a day, automatically. Read-only.
+        </div>
+        <div
+          onClick={connect}
+          style={{ background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 600, padding: 9, borderRadius: 10, cursor: "pointer", boxShadow: "0 6px 16px rgba(217,79,125,0.25)" }}
+        >
+          Connect Gmail
         </div>
       </div>
     );
@@ -56,43 +51,38 @@ export default function GmailConnect({
 
   if (account.status !== "active") {
     return (
-      <div className="rounded-xl bg-amber-50 px-5 py-4 ring-1 ring-amber-200">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-semibold text-amber-900">
-              Gmail connection expired
-            </div>
-            <p className="mt-1 text-sm text-amber-800/80">
-              We can no longer read {account.google_email}. Reconnect to keep
-              auto-tracking new purchases.
-            </p>
-          </div>
-          <button
-            onClick={connect}
-            className="whitespace-nowrap rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
-          >
-            Reconnect
-          </button>
+      <div style={{ background: "#faf1de", border: "1px solid #ecd9a8", borderRadius: 16, padding: 15 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#a97c1d", marginBottom: 4 }}>
+          Gmail connection expired
+        </div>
+        <div style={{ fontSize: 12, color: "#a98f56", lineHeight: 1.4, marginBottom: 12 }}>
+          We can no longer read {account.google_email}.
+        </div>
+        <div
+          onClick={connect}
+          style={{ background: "#2e2530", color: "#fff", textAlign: "center", fontSize: 13, fontWeight: 600, padding: 9, borderRadius: 10, cursor: "pointer" }}
+        >
+          Reconnect
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-between rounded-xl bg-white px-5 py-3 text-sm ring-1 ring-stone-200">
-      <div className="flex items-center gap-2">
-        <Mail size={14} className="text-emerald-600" />
-        <span className="font-medium text-stone-800">{account.google_email}</span>
-        <span className="text-stone-400">
-          connected
-          {account.last_synced_at &&
-            ` · last checked ${new Date(account.last_synced_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
-        </span>
+    <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 16, padding: "12px 15px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700 }}>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#5fb897", flexShrink: 0 }} />
+        Gmail connected
+      </div>
+      <div style={{ fontSize: 11.5, color: "#9a8c92", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {account.google_email}
+        {account.last_synced_at &&
+          ` · checked ${new Date(account.last_synced_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
       </div>
       <button
         disabled={busy}
         onClick={disconnect}
-        className="font-medium text-stone-400 hover:text-red-500 disabled:opacity-50"
+        style={{ marginTop: 8, border: "none", background: "transparent", padding: 0, fontSize: 11.5, fontWeight: 600, color: "#c2b4b9", cursor: "pointer" }}
       >
         Disconnect
       </button>

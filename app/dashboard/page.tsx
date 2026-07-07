@@ -1,28 +1,58 @@
 "use client";
 
-// Dashboard — adapted from the user's RetsyDashboard.jsx concept (warm stone
-// palette, table layout, decision dropdown) and wired to real data with the
-// five-state model: Deciding / To return / Returned / Kept / Missed(derived).
+// Dashboard — translated from the user's Claude Design export
+// ("Return Tracker Dashboard.dc.html"): blush palette, Instrument Serif +
+// Manrope, sidebar nav views, stat cards, sortable deadlines table.
+// Wired to real data with the five-state model: Deciding(undecided) /
+// To return / Returned / Kept / Missed (derived when the window closes).
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  AlertTriangle,
-  BadgeDollarSign,
-  CheckCircle2,
-  ChevronDown,
-  Clock,
-  Mail,
-  PackageCheck,
-  Store,
-  X,
-  XCircle,
-} from "lucide-react";
 import { signup } from "@/lib/api";
 import type { Purchase } from "@/lib/types";
-import { bucketOf, daysUntil, dollarsAtStake, formatDeadline } from "@/lib/purchaseGroups";
+import { bucketOf, daysUntil, formatDeadline, type Bucket } from "@/lib/purchaseGroups";
 import { useDashboardData, type StatusAction } from "@/components/useDashboardData";
 import GmailConnect from "@/components/GmailConnect";
+
+const FONTS_URL =
+  "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap";
+
+const SERIF = "'Instrument Serif', Georgia, serif";
+const SANS = "'Manrope', system-ui, sans-serif";
+
+// Deadline color scale from the design.
+function scale(daysLeft: number, bucket: Bucket) {
+  if (bucket === "returned") return { color: "#5fb897", tint: "#e8f4ee" };
+  if (bucket === "kept") return { color: "#9a8c92", tint: "#f1e9ea" };
+  if (bucket === "missed") return { color: "#9a8c92", tint: "#f1e9ea" };
+  if (daysLeft <= 2) return { color: "#d94f7d", tint: "#fdeaf1" };
+  if (daysLeft <= 6) return { color: "#ef8560", tint: "#fdeee7" };
+  if (daysLeft <= 13) return { color: "#d9a13f", tint: "#faf1de" };
+  return { color: "#5fb897", tint: "#e8f4ee" };
+}
+
+function priceOf(p: Purchase): number | null {
+  const m = p.order_total?.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
+  return m ? parseFloat(m[1].replace(/,/g, "")) : null;
+}
+
+function money(n: number): string {
+  return "$" + Math.round(n).toLocaleString("en-US");
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#fbf1ef", color: "#9a8c92" }}>
+          Loading…
+        </main>
+      }
+    >
+      <DashboardPageInner />
+    </Suspense>
+  );
+}
 
 function DashboardPageInner() {
   const searchParams = useSearchParams();
@@ -33,22 +63,7 @@ function DashboardPageInner() {
   if (!email || !token) {
     return <RequestLinkScreen />;
   }
-
   return <Dashboard email={email} token={token} gmailFlag={gmailFlag} />;
-}
-
-export default function DashboardPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-          <p className="text-stone-400">Loading…</p>
-        </main>
-      }
-    >
-      <DashboardPageInner />
-    </Suspense>
-  );
 }
 
 function RequestLinkScreen() {
@@ -63,37 +78,36 @@ function RequestLinkScreen() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="font-serif text-3xl tracking-tight text-stone-900">Retsy</h1>
-        <p className="mt-2 text-sm text-stone-500">
+    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#fbf1ef", fontFamily: SANS, color: "#2e2530", padding: 24 }}>
+      <link rel="stylesheet" href={FONTS_URL} />
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <h1 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 40, margin: 0 }}>Retsy</h1>
+        <p style={{ marginTop: 8, fontSize: 15, color: "#7d7078" }}>
           Enter your email and we&apos;ll send you a link to your dashboard.
         </p>
         {status === "done" ? (
-          <div className="mt-6 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200">
+          <div style={{ marginTop: 20, background: "#e8f4ee", color: "#3d7d63", borderRadius: 12, padding: "12px 16px", fontSize: 14 }}>
             Check your inbox for the link.
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3">
+          <form onSubmit={handleSubmit} style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
             <input
               type="email"
               required
               placeholder="you@email.com"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-base focus:border-stone-400 focus:outline-none"
+              style={{ fontFamily: SANS, border: "1px solid #f1e2e3", background: "#fff", borderRadius: 12, padding: "12px 16px", fontSize: 15 }}
             />
             <button
               type="submit"
               disabled={status === "loading"}
-              className="rounded-lg bg-stone-900 px-6 py-3 text-base font-semibold text-white hover:bg-stone-700 disabled:opacity-60"
+              style={{ background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px 20px", borderRadius: 13, border: "none", cursor: "pointer", boxShadow: "0 8px 20px rgba(217,79,125,0.3)", opacity: status === "loading" ? 0.6 : 1 }}
             >
               {status === "loading" ? "Sending…" : "Email me a link"}
             </button>
             {status === "error" && (
-              <p className="text-sm text-red-600">
-                Couldn&apos;t send that — check the address and try again.
-              </p>
+              <p style={{ fontSize: 13, color: "#d94f7d" }}>Couldn&apos;t send that — check the address and try again.</p>
             )}
           </form>
         )}
@@ -102,98 +116,15 @@ function RequestLinkScreen() {
   );
 }
 
-// ── Decision dropdown (from RetsyDashboard.jsx) ─────────────────────────
-
-type Decision = "undecided" | "return" | "keep";
-
-const decisionMeta: Record<Decision, { label: string; dot: string; text: string }> = {
-  undecided: { label: "Decide…", dot: "bg-stone-300", text: "text-stone-500" },
-  return: { label: "Return", dot: "bg-red-500", text: "text-red-700" },
-  keep: { label: "Keep", dot: "bg-emerald-500", text: "text-emerald-700" },
-};
-
-function DecisionSelect({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: Decision;
-  disabled: boolean;
-  onChange: (d: Decision) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const meta = decisionMeta[value];
-  const options: Decision[] = ["undecided", "return", "keep"];
-
-  return (
-    <div className="relative inline-block text-left">
-      <button
-        disabled={disabled}
-        onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium transition-colors hover:border-stone-300 disabled:opacity-50 ${meta.text}`}
-      >
-        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-        {meta.label}
-        <ChevronDown size={14} className="text-stone-400" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1.5 w-40 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-lg">
-            {options.map((opt) => (
-              <button
-                key={opt}
-                onClick={() => {
-                  onChange(opt);
-                  setOpen(false);
-                }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-stone-700 hover:bg-stone-50"
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${decisionMeta[opt].dot}`} />
-                {decisionMeta[opt].label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ── Urgency + outcome styling (from RetsyDashboard.jsx) ─────────────────
-
-function urgency(days: number) {
-  if (days <= 3) return "critical";
-  if (days <= 10) return "soon";
-  return "fine";
-}
-
-const urgencyStyles: Record<string, string> = {
-  critical: "bg-red-50 text-red-700 ring-1 ring-red-200",
-  soon: "bg-amber-50 text-amber-700 ring-1 ring-amber-200",
-  fine: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-};
-
-const resolvedTagMeta = {
-  returned: { label: "Returned", icon: CheckCircle2, cls: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" },
-  kept: { label: "Kept", icon: PackageCheck, cls: "bg-stone-100 text-stone-500 ring-1 ring-stone-200" },
-  missed: { label: "Missed", icon: XCircle, cls: "bg-red-50 text-red-700 ring-1 ring-red-200" },
-} as const;
-
 // ── Dashboard ────────────────────────────────────────────────────────────
 
-function Dashboard({
-  email,
-  token,
-  gmailFlag,
-}: {
-  email: string;
-  token: string;
-  gmailFlag: string | null;
-}) {
+type View = "dashboard" | "all" | "kept" | "returns";
+
+function Dashboard({ email, token, gmailFlag }: { email: string; token: string; gmailFlag: string | null }) {
   const router = useRouter();
-  const { purchases, gmailAccount, setGmailAccount, loadError, busyId, act } =
-    useDashboardData(email, token);
+  const { purchases, gmailAccount, setGmailAccount, loadError, busyId, act } = useDashboardData(email, token);
+  const [view, setView] = useState<View>("dashboard");
+  const [sort, setSort] = useState<"date" | "cost">("date");
   const [banner, setBanner] = useState<"connected" | "error" | null>(
     gmailFlag === "connected" || gmailFlag === "error" ? gmailFlag : null
   );
@@ -208,282 +139,325 @@ function Dashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { active, resolved, criticalCount, totalSaved } = useMemo(() => {
-    const active: Purchase[] = [];
-    const resolved: { p: Purchase; outcome: keyof typeof resolvedTagMeta }[] = [];
-    let criticalCount = 0;
+  const d = useMemo(() => {
+    const all = purchases ?? [];
+    const withBucket = all.map((p) => ({ p, bucket: bucketOf(p), days: daysUntil(p.return_deadline) }));
+    const open = withBucket
+      .filter((x) => x.bucket === "deciding" || x.bucket === "to_return")
+      .sort((a, b) => a.days - b.days);
+    const kept = withBucket.filter((x) => x.bucket === "kept" || x.bucket === "missed");
+    const returned = withBucket.filter((x) => x.bucket === "returned");
+    const returnsView = withBucket.filter((x) => x.bucket === "returned" || x.bucket === "to_return");
 
-    for (const p of purchases ?? []) {
-      const bucket = bucketOf(p);
-      if (bucket === "deciding" || bucket === "to_return") {
-        active.push(p);
-        if (urgency(daysUntil(p.return_deadline)) === "critical") criticalCount++;
-      } else {
-        resolved.push({ p, outcome: bucket as keyof typeof resolvedTagMeta });
-      }
-    }
-    active.sort((a, b) => a.return_deadline.localeCompare(b.return_deadline));
-    const totalSaved = dollarsAtStake(
-      resolved.filter((r) => r.outcome === "returned").map((r) => r.p)
-    );
-    return { active, resolved, criticalCount, totalSaved };
+    const tiedUp = open.reduce((a, x) => a + (priceOf(x.p) ?? 0), 0);
+    const saved = returned.reduce((a, x) => a + (priceOf(x.p) ?? 0), 0);
+    const closingSoon = open.filter((x) => x.days <= 7).length;
+
+    return { all: withBucket, open, kept, returned, returnsView, tiedUp, saved, closingSoon };
   }, [purchases]);
 
   if (loadError) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-        <p className="max-w-sm text-center text-red-600">{loadError}</p>
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#fbf1ef", color: "#d94f7d", fontFamily: SANS }}>
+        {loadError}
       </main>
     );
   }
-
   if (!purchases) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-stone-50 px-6">
-        <p className="text-stone-400">Loading…</p>
+      <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#fbf1ef", color: "#9a8c92", fontFamily: SANS }}>
+        Loading…
       </main>
     );
   }
 
-  const decisionOf = (p: Purchase): Decision =>
-    p.status === "to_return" ? "return" : "undecided";
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const name = email.split("@")[0].replace(/[^a-zA-Z]/g, " ").trim().split(/\s+/)[0];
+  const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-  const actForDecision = (id: string, d: Decision) => {
-    if (d === "return") act(id, "to_return");
-    else if (d === "keep") act(id, "kept");
-    else act(id, "undecided");
+  const nav: { key: View; label: string; count: number }[] = [
+    { key: "dashboard", label: "Dashboard", count: d.open.length },
+    { key: "all", label: "All Purchases", count: d.all.length },
+    { key: "kept", label: "Kept Purchases", count: d.kept.length },
+    { key: "returns", label: "Returns", count: d.returnsView.length },
+  ];
+
+  const stats = [
+    { label: "Tied up in returns", value: money(d.tiedUp), sub: `${d.open.length} item${d.open.length === 1 ? "" : "s"} still in window`, color: "#d94f7d", tint: "#fdeaf1" },
+    { label: "Money saved", value: money(d.saved), sub: `${d.returned.length} return${d.returned.length === 1 ? "" : "s"} completed`, color: "#5fb897", tint: "#e8f4ee" },
+    { label: "Closing this week", value: String(d.closingSoon), sub: "act within 7 days", color: "#ef8560", tint: "#fdeee7" },
+    { label: "Next deadline", value: d.open.length ? `${d.open[0].days} days` : "—", sub: d.open.length ? d.open[0].p.item_name : "nothing pending", color: "#b79be0", tint: "#f2ecfb" },
+  ];
+
+  const listMeta: Record<Exclude<View, "dashboard">, { title: string; sub: string; rows: typeof d.all }> = {
+    all: { title: "All Purchases", sub: `${d.all.length} purchases total`, rows: [...d.all].sort((a, b) => (b.p.created_at ?? "").localeCompare(a.p.created_at ?? "")) },
+    kept: { title: "Kept Purchases", sub: "window missed or kept on purpose", rows: d.kept },
+    returns: { title: "Returns", sub: `${d.returnsView.filter((x) => x.bucket === "to_return").length} to return · ${d.returned.length} completed`, rows: d.returnsView },
   };
 
+  const headerSub =
+    view === "dashboard"
+      ? d.open.length
+        ? `You have ${d.closingSoon} return${d.closingSoon === 1 ? "" : "s"} closing this week — let's not lose that money.`
+        : "Nothing pending right now — nice work."
+      : listMeta[view].sub;
+
+  const sortedDeadlines = [...d.open].sort((a, b) =>
+    sort === "cost" ? (priceOf(b.p) ?? 0) - (priceOf(a.p) ?? 0) : a.days - b.days
+  );
+
   return (
-    <div className="min-h-screen bg-stone-50 px-6 py-10 font-sans text-stone-900">
-      <div className="mx-auto max-w-4xl">
-        {/* header */}
-        <div className="mb-6 flex items-end justify-between border-b border-stone-200 pb-6">
-          <div>
-            <h1 className="font-serif text-3xl tracking-tight text-stone-900">Retsy</h1>
-            <p className="mt-1 text-sm text-stone-500">Track before the window closes</p>
+    <div style={{ minHeight: "100vh", background: "#fbf1ef", fontFamily: SANS, color: "#2e2530", display: "grid", gridTemplateColumns: "240px 1fr" }}>
+      <link rel="stylesheet" href={FONTS_URL} />
+
+      {/* SIDEBAR */}
+      <aside style={{ borderRight: "1px solid #f1e2e3", padding: "30px 22px", display: "flex", flexDirection: "column", gap: 28, position: "sticky", top: 0, height: "100vh" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 11, background: "linear-gradient(140deg, #e8749a, #d94f7d)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(217,79,125,0.32)" }}>
+            <div style={{ width: 13, height: 13, border: "2.5px solid #fff", borderRadius: "50%", borderRightColor: "transparent" }} />
           </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-2">
-              <p className="text-sm text-stone-500">
-                <span className="font-mono text-base font-medium text-stone-900">{active.length}</span> open
-              </p>
-              {totalSaved !== null && totalSaved > 0 && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                  <BadgeDollarSign size={11} />
-                  <span className="font-mono">${totalSaved.toFixed(2)}</span> saved
-                </span>
-              )}
-            </div>
-            {criticalCount > 0 && (
-              <p className="mt-0.5 flex items-center justify-end gap-1 text-xs font-medium text-red-600">
-                <AlertTriangle size={12} />
-                {criticalCount} closing within 3 days
-              </p>
-            )}
-            <p className="mt-0.5 text-xs text-stone-400">{email}</p>
-          </div>
+          <span style={{ fontFamily: SERIF, fontSize: 24, letterSpacing: 0.2 }}>Retsy</span>
         </div>
 
-        {banner === "connected" && (
-          <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-200">
-            Gmail connected. We&apos;re scanning your last 30 days of receipts now —
-            refresh in a minute to see them. After this, we check once a day.
-          </div>
-        )}
-        {banner === "error" && (
-          <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
-            Couldn&apos;t connect Gmail — please try again.
-          </div>
-        )}
-
-        <GmailConnect
-          email={email}
-          token={token}
-          account={gmailAccount}
-          onDisconnected={() => setGmailAccount(null)}
-        />
-
-        {/* empty state: the two ways in */}
-        {purchases.length === 0 && (
-          <div className="mt-6 rounded-xl border border-dashed border-stone-300 bg-white px-6 py-8">
-            <p className="text-center font-medium text-stone-700">
-              Nothing tracked yet — two ways to get started:
-            </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-lg border border-stone-200 px-4 py-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
-                  <Mail size={14} /> Connect your Gmail
-                </div>
-                <p className="mt-1 text-sm text-stone-500">
-                  Automatic — we check your inbox once a day and track new receipts. Read-only.
-                </p>
+        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {nav.map((n) => {
+            const activeNav = view === n.key;
+            return (
+              <div
+                key={n.key}
+                onClick={() => setView(n.key)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 13px", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: activeNav ? "#2e2530" : "#7d7078", background: activeNav ? "#fdeef3" : "transparent" }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: activeNav ? "#d94f7d" : "#e2d3d6" }} />
+                  {n.label}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: activeNav ? "#d94f7d" : "#c2b4b9" }}>{n.count}</span>
               </div>
-              <div className="rounded-lg border border-stone-200 px-4 py-4">
-                <div className="text-sm font-semibold text-stone-800">Forward receipts manually</div>
-                <p className="mt-1 text-sm text-stone-500">
-                  Works with any inbox — forward order confirmations to{" "}
-                  <strong className="text-stone-800">returns@retsy.xyz</strong>.
-                </p>
-              </div>
+            );
+          })}
+        </nav>
+
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+          <GmailConnect email={email} token={token} account={gmailAccount} onDisconnected={() => setGmailAccount(null)} />
+          <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 16, padding: 15 }}>
+            <div style={{ fontFamily: SERIF, fontSize: 15, lineHeight: 1.25, marginBottom: 4 }}>Track anything.</div>
+            <div style={{ fontSize: 12, color: "#9a8c92", lineHeight: 1.4 }}>
+              Forward any order confirmation to <strong style={{ color: "#2e2530" }}>returns@retsy.xyz</strong> and we&apos;ll watch the window.
             </div>
           </div>
-        )}
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(140deg, #f7cdda, #e8749a)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 13, flexShrink: 0 }}>
+              {displayName.charAt(0)}
+            </div>
+            <div style={{ lineHeight: 1.2, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{displayName}</div>
+              <div style={{ fontSize: 11, color: "#b0a2a7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
+            </div>
+          </div>
+        </div>
+      </aside>
 
-        {/* active table */}
-        {purchases.length > 0 && (
-          <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-stone-200 bg-stone-50/80 text-left text-xs font-medium uppercase tracking-wide text-stone-400">
-                  <th className="px-5 py-3">Item</th>
-                  <th className="hidden px-5 py-3 text-right sm:table-cell">Price</th>
-                  <th className="px-5 py-3">Days to return</th>
-                  <th className="px-5 py-3">Decision</th>
-                  <th className="px-5 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {active.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-sm text-stone-400">
-                      Nothing open right now.
-                    </td>
-                  </tr>
+      {/* MAIN */}
+      <main style={{ padding: "34px 40px 48px", minWidth: 0 }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          {banner === "connected" && (
+            <div style={{ marginBottom: 18, background: "#e8f4ee", color: "#3d7d63", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
+              Gmail connected — we&apos;re scanning your last 30 days of receipts now. Refresh in a minute to see them.
+            </div>
+          )}
+          {banner === "error" && (
+            <div style={{ marginBottom: 18, background: "#fdeaf1", color: "#d94f7d", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
+              Couldn&apos;t connect Gmail — please try again.
+            </div>
+          )}
+
+          {/* HEADER */}
+          <header style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 20, marginBottom: 30 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#d94f7d", letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 7 }}>{today}</div>
+              <h1 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 40, lineHeight: 1.05, margin: 0 }}>
+                {view === "dashboard" ? (
+                  <>
+                    {greeting}, <span style={{ fontStyle: "italic" }}>{displayName}</span>
+                  </>
+                ) : (
+                  listMeta[view].title
                 )}
-                {active.map((p) => {
-                  const left = daysUntil(p.return_deadline);
-                  return (
-                    <tr key={p.id} className="border-b border-stone-100 last:border-b-0 hover:bg-stone-50/60">
-                      <td className="max-w-[16rem] px-5 py-4">
-                        <div className="truncate font-medium text-stone-800" title={p.item_name}>
-                          {p.item_name}
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-stone-400">
-                          <Store size={12} />
-                          {p.retailer}
-                          {p.delivery_date
-                            ? ` · delivered ${formatDeadline(p.delivery_date)}`
-                            : p.order_date
-                              ? ` · ordered ${formatDeadline(p.order_date)}`
-                              : ""}
-                        </div>
-                      </td>
-                      <td className="hidden px-5 py-4 text-right font-mono text-stone-800 sm:table-cell">
-                        {p.order_total || "—"}
-                      </td>
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 font-mono text-xs font-medium ${urgencyStyles[urgency(left)]}`}
-                        >
-                          <Clock size={11} />
-                          {left}d left
-                        </span>
-                        <div className="mt-1 text-[10px] text-stone-400">
-                          by {formatDeadline(p.return_deadline)}
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <DecisionSelect
-                          value={decisionOf(p)}
-                          disabled={busyId === p.id}
-                          onChange={(d) => actForDecision(p.id, d)}
-                        />
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {p.status === "to_return" ? (
-                            <button
-                              disabled={busyId === p.id}
-                              onClick={() => act(p.id, "returned")}
-                              className="whitespace-nowrap rounded-full bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-700 ring-1 ring-sky-200 transition-colors hover:bg-sky-100 disabled:opacity-50"
-                            >
-                              Mark returned
-                            </button>
-                          ) : (
-                            <span className="text-xs text-stone-300">—</span>
-                          )}
-                          <button
-                            disabled={busyId === p.id}
-                            onClick={() => act(p.id, "delete")}
-                            title="Delete"
-                            className="text-stone-300 hover:text-red-500 disabled:opacity-50"
-                          >
-                            <X size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* resolved */}
-        {resolved.length > 0 && (
-          <div className="mt-10">
-            <h2 className="mb-3 font-serif text-lg text-stone-700">Resolved</h2>
-            <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
-              <table className="w-full border-collapse text-sm">
-                <tbody>
-                  {resolved.map(({ p, outcome }) => {
-                    const tag = resolvedTagMeta[outcome];
-                    const Icon = tag.icon;
-                    return (
-                      <tr key={p.id} className="border-b border-stone-100 last:border-b-0">
-                        <td className="max-w-[18rem] px-5 py-3.5">
-                          <div className="truncate font-medium text-stone-700" title={p.item_name}>
-                            {p.item_name}
-                          </div>
-                          <div className="text-xs text-stone-400">{p.retailer}</div>
-                        </td>
-                        <td className="hidden px-5 py-3.5 text-right font-mono text-stone-500 sm:table-cell">
-                          {p.order_total || ""}
-                        </td>
-                        <td className="px-5 py-3.5 text-right">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${tag.cls}`}>
-                            <Icon size={11} />
-                            {tag.label}
-                          </span>
-                        </td>
-                        <td className="w-24 px-5 py-3.5 text-right">
-                          {outcome === "missed" ? (
-                            <button
-                              disabled={busyId === p.id}
-                              onClick={() => act(p.id, "returned")}
-                              className="text-xs font-medium text-stone-400 hover:text-emerald-600"
-                              title="Returned it anyway"
-                            >
-                              Returned it
-                            </button>
-                          ) : (
-                            <button
-                              disabled={busyId === p.id}
-                              onClick={() => act(p.id, "undecided")}
-                              className="text-xs font-medium text-stone-300 hover:text-stone-600"
-                            >
-                              Undo
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              </h1>
+              <p style={{ margin: "9px 0 0", fontSize: 15, color: "#7d7078" }}>{headerSub}</p>
             </div>
-          </div>
-        )}
+          </header>
 
-        {purchases.length > 0 && (
-          <p className="mt-4 text-xs text-stone-400">
-            Undecided or &quot;Return&quot; items move to Resolved automatically once the
-            window closes, tagged Missed. Mark an item returned before then to close it out.
-          </p>
-        )}
+          {/* STAT CARDS */}
+          <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 18, marginBottom: 26 }}>
+            {stats.map((s) => (
+              <div key={s.label} style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 20, padding: 20, boxShadow: "0 10px 24px rgba(203,150,165,0.08)", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#9a8c92" }}>{s.label}</span>
+                  <span style={{ width: 30, height: 30, borderRadius: 9, background: s.tint, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color }} />
+                  </span>
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.value}</div>
+                <div style={{ fontSize: 12.5, color: "#a99ba0", marginTop: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.sub}</div>
+              </div>
+            ))}
+          </section>
+
+          {purchases.length === 0 && (
+            <div style={{ background: "#fff", border: "1px dashed #eec2d0", borderRadius: 22, padding: "36px 28px", textAlign: "center" }}>
+              <div style={{ fontFamily: SERIF, fontSize: 22, marginBottom: 8 }}>Nothing tracked yet</div>
+              <div style={{ fontSize: 14, color: "#7d7078", maxWidth: 460, margin: "0 auto" }}>
+                Connect your Gmail from the sidebar for automatic tracking, or forward any order
+                confirmation to <strong style={{ color: "#2e2530" }}>returns@retsy.xyz</strong>.
+              </div>
+            </div>
+          )}
+
+          {/* DASHBOARD VIEW: upcoming deadlines */}
+          {view === "dashboard" && d.open.length > 0 && (
+            <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 24, margin: 0 }}>Upcoming deadlines</h2>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "#b0a2a7" }}>Sort by</span>
+                  {(["date", "cost"] as const).map((k) => (
+                    <div
+                      key={k}
+                      onClick={() => setSort(k)}
+                      style={{ fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 20, cursor: "pointer", color: sort === k ? "#fff" : "#7d7078", background: sort === k ? "#d94f7d" : "#f6ecec", textTransform: "capitalize" }}
+                    >
+                      {k}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <PurchaseTable rows={sortedDeadlines} busyId={busyId} act={act} showDelete={false} />
+            </div>
+          )}
+
+          {/* LIST VIEWS */}
+          {view !== "dashboard" && (
+            <section style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 24, margin: 0 }}>{listMeta[view].title}</h2>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#9a8c92" }}>{listMeta[view].sub}</span>
+              </div>
+              {listMeta[view].rows.length === 0 ? (
+                <div style={{ padding: "28px 8px", textAlign: "center", fontSize: 13.5, color: "#b0a2a7" }}>Nothing here yet.</div>
+              ) : (
+                <PurchaseTable rows={listMeta[view].rows} busyId={busyId} act={act} showDelete />
+              )}
+            </section>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// ── Purchase table (design's PurchaseTable, real data) ───────────────────
+
+const SELECT_VALUE: Record<Bucket, string> = {
+  deciding: "undecided",
+  to_return: "return",
+  returned: "returned",
+  kept: "kept",
+  missed: "undecided",
+};
+
+function PurchaseTable({
+  rows,
+  busyId,
+  act,
+  showDelete,
+}: {
+  rows: { p: Purchase; bucket: Bucket; days: number }[];
+  busyId: string | null;
+  act: (id: string, a: StatusAction) => void;
+  showDelete: boolean;
+}) {
+  const grid = `minmax(110px,1.3fr) minmax(140px,1.9fr) minmax(64px,0.7fr) minmax(86px,0.8fr) minmax(140px,1fr)${showDelete ? " 28px" : ""}`;
+
+  function onSelect(p: Purchase, value: string) {
+    if (value === "undecided") act(p.id, "undecided");
+    else if (value === "return") act(p.id, "to_return");
+    else if (value === "returned") act(p.id, "returned");
+    else if (value === "kept") act(p.id, "kept");
+  }
+
+  return (
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: grid, gap: 8, minWidth: 560, padding: "0 8px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#b0a2a7" }}>
+        <div>Retailer</div>
+        <div>Item</div>
+        <div>Price</div>
+        <div>Days left</div>
+        <div>Action</div>
+        {showDelete && <div />}
       </div>
+      {rows.map(({ p, bucket, days }) => {
+        const s = scale(days, bucket);
+        const daysText =
+          bucket === "returned" ? "Returned" :
+          bucket === "kept" ? "Kept" :
+          bucket === "missed" ? "Missed" :
+          `${days}d left`;
+        const busy = busyId === p.id;
+        return (
+          <div key={p.id} style={{ display: "grid", gridTemplateColumns: grid, gap: 8, minWidth: 560, alignItems: "center", padding: "12px 8px", borderTop: "1px solid #f6ecec", opacity: busy ? 0.5 : 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 7, background: s.tint, color: s.color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>
+                {(p.retailer || "?").charAt(0).toUpperCase()}
+              </span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.retailer}</span>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={p.item_name}>
+                {p.item_name}
+              </div>
+              <div style={{ fontSize: 11, color: "#b0a2a7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {p.delivery_date
+                  ? `delivered ${formatDeadline(p.delivery_date)}`
+                  : p.order_date
+                    ? `ordered ${formatDeadline(p.order_date)}`
+                    : ""}
+                {" · by "}
+                {formatDeadline(p.return_deadline)}
+              </div>
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.order_total || "—"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: s.color, whiteSpace: "nowrap" }}>{daysText}</span>
+            </div>
+            <select
+              disabled={busy}
+              value={SELECT_VALUE[bucket]}
+              onChange={(e) => onSelect(p, e.target.value)}
+              style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, border: "1px solid transparent", borderRadius: 10, padding: "6px 8px", cursor: "pointer", background: s.tint, color: s.color }}
+            >
+              <option value="undecided">Undecided</option>
+              <option value="return">To Return</option>
+              <option value="kept">Keep</option>
+              <option value="returned">Return Complete</option>
+            </select>
+            {showDelete && (
+              <button
+                disabled={busy}
+                onClick={() => act(p.id, "delete")}
+                title="Delete"
+                style={{ border: "none", background: "transparent", color: "#d9c4ca", cursor: "pointer", fontSize: 15, padding: 0 }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
