@@ -20,8 +20,16 @@ function redirect(location: string): Response {
   return new Response(null, { status: 302, headers: { Location: location } });
 }
 
-function dashboardUrl(email: string, token: string, gmailFlag: string): string {
-  return `${APP_URL}/dashboard?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}&gmail=${gmailFlag}`;
+// `reason` shows up in the URL on failure so problems are diagnosable
+// from the user's address bar without server log access.
+function dashboardUrl(
+  email: string,
+  token: string,
+  gmailFlag: string,
+  reason?: string
+): string {
+  const base = `${APP_URL}/dashboard?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}&gmail=${gmailFlag}`;
+  return reason ? `${base}&reason=${encodeURIComponent(reason)}` : base;
 }
 
 Deno.serve(async (req) => {
@@ -31,7 +39,7 @@ Deno.serve(async (req) => {
   const oauthError = url.searchParams.get("error");
 
   if (!state) {
-    return redirect(`${APP_URL}/dashboard?gmail=error`);
+    return redirect(`${APP_URL}/dashboard?gmail=error&reason=no_state`);
   }
 
   const supabase = getSupabaseAdmin();
@@ -51,7 +59,7 @@ Deno.serve(async (req) => {
     !stateRow ||
     Date.now() - new Date(stateRow.created_at).getTime() > STATE_MAX_AGE_MS
   ) {
-    return redirect(`${APP_URL}/dashboard?gmail=error`);
+    return redirect(`${APP_URL}/dashboard?gmail=error&reason=state_invalid`);
   }
 
   // We need the user's email + dashboard token to send them back to a
@@ -63,12 +71,14 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (!user) {
-    return redirect(`${APP_URL}/dashboard?gmail=error`);
+    return redirect(`${APP_URL}/dashboard?gmail=error&reason=no_user`);
   }
 
   if (oauthError || !code) {
     // User declined the consent screen.
-    return redirect(dashboardUrl(user.email, user.dashboard_token, "error"));
+    return redirect(
+      dashboardUrl(user.email, user.dashboard_token, "error", `denied_${oauthError || "no_code"}`)
+    );
   }
 
   try {
@@ -96,7 +106,7 @@ Deno.serve(async (req) => {
 
     if (upsertError) {
       console.error("gmail account upsert error", upsertError);
-      return redirect(dashboardUrl(user.email, user.dashboard_token, "error"));
+      return redirect(dashboardUrl(user.email, user.dashboard_token, "error", "db_upsert"));
     }
 
     // Kick off the first sync immediately (30-day backfill) instead of
@@ -126,6 +136,11 @@ Deno.serve(async (req) => {
     return redirect(dashboardUrl(user.email, user.dashboard_token, "connected"));
   } catch (err) {
     console.error("oauth callback error", err);
-    return redirect(dashboardUrl(user.email, user.dashboard_token, "error"));
+    const msg = String(err instanceof Error ? err.message : err)
+      .slice(0, 120)
+      .replace(/[^a-zA-Z0-9 _():./-]/g, "");
+    return redirect(
+      dashboardUrl(user.email, user.dashboard_token, "error", `exchange: ${msg}`)
+    );
   }
 });
