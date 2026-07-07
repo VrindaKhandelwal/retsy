@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
 
   const { data: accounts, error: accountsError } = await supabase
     .from("gmail_accounts")
-    .select("id, user_id, google_email, refresh_token, last_synced_at, users!inner(email)")
+    .select("id, user_id, google_email, refresh_token, last_synced_at, users!inner(email, dashboard_token)")
     .eq("status", "active")
     .limit(MAX_ACCOUNTS_PER_RUN);
 
@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
   for (const account of accounts ?? []) {
     const runStart = new Date();
     const userEmail = (account as any).users?.email;
+    const dashboardToken = (account as any).users?.dashboard_token;
 
     let accessToken: string;
     try {
@@ -279,7 +280,7 @@ Deno.serve(async (req) => {
         await sendGmailDigestEmail({
           to: userEmail,
           purchases: newPurchases,
-          dashboardUrl: `${APP_URL}/dashboard`,
+          dashboardUrl: `${APP_URL}/dashboard?email=${encodeURIComponent(userEmail)}&token=${encodeURIComponent(dashboardToken)}`,
         }).catch((e) => console.error("digest email failed", e));
       }
 
