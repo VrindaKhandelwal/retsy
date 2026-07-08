@@ -122,7 +122,8 @@ type View = "dashboard" | "all" | "kept" | "returns";
 
 function Dashboard({ email, token, gmailFlag }: { email: string; token: string; gmailFlag: string | null }) {
   const router = useRouter();
-  const { purchases, gmailAccount, setGmailAccount, loadError, busyId, act } = useDashboardData(email, token);
+  const { purchases, gmailAccount, setGmailAccount, loadError, busyId, act, refresh } =
+    useDashboardData(email, token);
   const [view, setView] = useState<View>("dashboard");
   const [sort, setSort] = useState<"date" | "cost">("date");
   const [banner, setBanner] = useState<"connected" | "error" | null>(
@@ -138,6 +139,15 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // While the inbox backfill is running, poll so purchases stream in live.
+  const syncing = gmailAccount?.status === "active" && gmailAccount?.sync_backlog === true;
+  useEffect(() => {
+    if (!syncing) return;
+    const id = setInterval(refresh, 10_000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncing]);
 
   const d = useMemo(() => {
     const all = purchases ?? [];
@@ -263,9 +273,16 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
       {/* MAIN */}
       <main style={{ padding: "34px 40px 48px", minWidth: 0 }}>
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-          {banner === "connected" && (
+          {banner === "connected" && !syncing && (
             <div style={{ marginBottom: 18, background: "#e8f4ee", color: "#3d7d63", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
-              Gmail connected — we&apos;re scanning your last 30 days of receipts now. Refresh in a minute to see them.
+              Gmail connected — we&apos;re scanning your last 30 days of receipts now.
+            </div>
+          )}
+          {syncing && (
+            <div style={{ marginBottom: 18, display: "flex", alignItems: "center", gap: 10, background: "#f2ecfb", color: "#7a5fb0", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
+              <span style={{ width: 14, height: 14, flexShrink: 0, border: "2px solid #b79be0", borderRightColor: "transparent", borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
+              Still scanning your inbox — purchases appear here as we find them. This page refreshes automatically.
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           )}
           {banner === "error" && (

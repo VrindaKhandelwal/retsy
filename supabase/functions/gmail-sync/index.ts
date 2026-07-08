@@ -299,6 +299,7 @@ Deno.serve(async (req) => {
         .update({
           last_synced_at: newWatermark.toISOString(),
           last_sync_error: null,
+          sync_backlog: !windowComplete,
           updated_at: new Date().toISOString(),
         })
         .eq("id", account.id);

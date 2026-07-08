@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   // clients just ignore the extra field.
   const { data: gmailAccount } = await supabase
     .from("gmail_accounts")
-    .select("google_email, status, last_synced_at")
+    .select("google_email, status, last_synced_at, sync_backlog")
     .eq("user_id", user.id)
     .maybeSingle();
 

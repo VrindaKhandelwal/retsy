@@ -99,6 +99,9 @@ Deno.serve(async (req) => {
           status: "active",
           last_synced_at: initialWatermark,
           last_sync_error: null,
+          // The 30-day backfill starts immediately; the dashboard shows a
+          // "still syncing" banner until gmail-sync clears this.
+          sync_backlog: true,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id" }

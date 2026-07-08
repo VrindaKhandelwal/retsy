@@ -29,4 +29,6 @@ export interface GmailAccount {
   google_email: string;
   status: "active" | "revoked" | "error";
   last_synced_at: string | null;
+  // True while the initial inbox backfill is still being processed.
+  sync_backlog?: boolean;
 }

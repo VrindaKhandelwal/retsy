@@ -56,5 +56,5 @@ export function useDashboardData(email: string, token: string) {
     setBusyId(null);
   }
 
-  return { purchases, gmailAccount, setGmailAccount, loadError, busyId, act };
+  return { purchases, gmailAccount, setGmailAccount, loadError, busyId, act, refresh };
 }
