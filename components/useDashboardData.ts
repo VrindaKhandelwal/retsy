@@ -26,8 +26,8 @@ export function useDashboardData(email: string, token: string) {
   const [loadError, setLoadError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function refresh() {
-    const { data, error } = await listPurchases(email, token);
+  async function refresh(opts?: { poll?: boolean }) {
+    const { data, error } = await listPurchases(email, token, opts?.poll ?? false);
     if (error || !data) {
       setLoadError(error || "Couldn't load your dashboard.");
     } else {

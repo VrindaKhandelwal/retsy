@@ -144,7 +144,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
   const syncing = gmailAccount?.status === "active" && gmailAccount?.sync_backlog === true;
   useEffect(() => {
     if (!syncing) return;
-    const id = setInterval(refresh, 10_000);
+    const id = setInterval(() => refresh({ poll: true }), 10_000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [syncing]);

@@ -36,6 +36,18 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Invalid link" }, 401);
   }
 
+  // Log a dashboard open — but not the frontend's auto-refresh polling
+  // (marked ?poll=1), which would inflate counts. Best-effort: a failed
+  // insert never breaks the dashboard.
+  if (url.searchParams.get("poll") !== "1") {
+    supabase
+      .from("dashboard_visits")
+      .insert({ user_id: user.id })
+      .then(({ error }: { error: unknown }) => {
+        if (error) console.error("visit insert error", error);
+      });
+  }
+
   const { data: purchases, error: purchasesError } = await supabase
     .from("purchases")
     .select(

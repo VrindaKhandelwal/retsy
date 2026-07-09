@@ -55,9 +55,11 @@ export function confirmPurchase(
   });
 }
 
-export function listPurchases(email: string, token: string) {
+// `poll` marks background auto-refreshes so they aren't counted as
+// dashboard visits server-side.
+export function listPurchases(email: string, token: string, poll = false) {
   return call<{ purchases: any[]; gmail_account: any | null }>(
-    `list-purchases?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
+    `list-purchases?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}${poll ? "&poll=1" : ""}`
   );
 }
 
