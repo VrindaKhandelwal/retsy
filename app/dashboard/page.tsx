@@ -118,7 +118,7 @@ function RequestLinkScreen() {
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 
-type View = "dashboard" | "all" | "kept" | "returns";
+type View = "dashboard" | "all" | "kept" | "returns" | "analytics";
 
 function Dashboard({ email, token, gmailFlag }: { email: string; token: string; gmailFlag: string | null }) {
   const router = useRouter();
@@ -191,11 +191,12 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
   const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
-  const nav: { key: View; label: string; count: number }[] = [
+  const nav: { key: View; label: string; count: number | null }[] = [
     { key: "dashboard", label: "Dashboard", count: d.open.length },
     { key: "all", label: "All Purchases", count: d.all.length },
     { key: "kept", label: "Kept", count: d.kept.length },
     { key: "returns", label: "Returns", count: d.returnsView.length },
+    { key: "analytics", label: "Analytics", count: null },
   ];
 
   const stats = [
@@ -205,7 +206,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
     { label: "Next deadline", value: d.open.length ? `${d.open[0].days} days` : "—", sub: d.open.length ? d.open[0].p.item_name : "nothing pending", color: "#b79be0", tint: "#f2ecfb" },
   ];
 
-  const listMeta: Record<Exclude<View, "dashboard">, { title: string; sub: string; rows: typeof d.all }> = {
+  const listMeta: Record<Exclude<View, "dashboard" | "analytics">, { title: string; sub: string; rows: typeof d.all }> = {
     all: { title: "All Purchases", sub: `${d.all.length} purchases total`, rows: [...d.all].sort((a, b) => (b.p.created_at ?? "").localeCompare(a.p.created_at ?? "")) },
     kept: { title: "Kept", sub: "window missed or kept on purpose", rows: d.kept },
     returns: { title: "Returns", sub: `${d.returnsView.filter((x) => x.bucket === "to_return").length} to return · ${d.returned.length} completed`, rows: d.returnsView },
@@ -216,7 +217,9 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
       ? d.open.length
         ? `You have ${d.closingSoon} return${d.closingSoon === 1 ? "" : "s"} closing this week — let's not lose that money.`
         : "Nothing pending right now — nice work."
-      : listMeta[view].sub;
+      : view === "analytics"
+        ? "Your shopping habits, spending, and outcomes at a glance."
+        : listMeta[view].sub;
 
   const sortedDeadlines = [...d.open].sort((a, b) =>
     sort === "cost" ? (priceOf(b.p) ?? 0) - (priceOf(a.p) ?? 0) : a.days - b.days
@@ -247,7 +250,9 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
                 >
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: activeNav ? "#d94f7d" : "#e2d3d6", flexShrink: 0 }} />
                   {n.label}
-                  <span style={{ fontSize: 11, fontWeight: 700, color: activeNav ? "#d94f7d" : "#c2b4b9" }}>{n.count}</span>
+                  {n.count !== null && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: activeNav ? "#d94f7d" : "#c2b4b9" }}>{n.count}</span>
+                  )}
                 </div>
               );
             })}
@@ -298,6 +303,8 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
                   <>
                     {greeting}, <span style={{ fontStyle: "italic" }}>{displayName}</span>
                   </>
+                ) : view === "analytics" ? (
+                  "Analytics"
                 ) : (
                   listMeta[view].title
                 )}
@@ -307,6 +314,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
           </header>
 
           {/* STAT CARDS */}
+          {view !== "analytics" && (
           <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 18, marginBottom: 26 }}>
             {stats.map((s) => (
               <div key={s.label} style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 20, padding: 20, boxShadow: "0 10px 24px rgba(203,150,165,0.08)", minWidth: 0 }}>
@@ -321,6 +329,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
               </div>
             ))}
           </section>
+          )}
 
           {purchases.length === 0 && (
             <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "52px 28px", textAlign: "center", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
@@ -393,8 +402,11 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
             </div>
           )}
 
+          {/* ANALYTICS VIEW */}
+          {view === "analytics" && <AnalyticsView purchases={purchases} />}
+
           {/* LIST VIEWS */}
-          {view !== "dashboard" && (
+          {view !== "dashboard" && view !== "analytics" && (
             <section style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 24, margin: 0 }}>{listMeta[view].title}</h2>
@@ -554,6 +566,183 @@ const SELECT_VALUE: Record<Bucket, string> = {
   kept: "kept",
   missed: "undecided",
 };
+
+// ── Analytics ────────────────────────────────────────────────────────────
+// All computed client-side from the purchases already loaded.
+
+const PALETTE = ["#d94f7d", "#ef8560", "#d9a13f", "#5fb897", "#b79be0", "#e8749a"];
+
+function AnalyticsView({ purchases }: { purchases: Purchase[] }) {
+  const a = useMemo(() => {
+    const dated = purchases.map((p) => ({
+      p,
+      price: priceOf(p),
+      date: p.order_date || p.created_at?.slice(0, 10) || null,
+      bucket: bucketOf(p),
+    }));
+
+    const totalSpent = dated.reduce((s, x) => s + (x.price ?? 0), 0);
+    const priced = dated.filter((x) => x.price !== null);
+    const avgOrder = priced.length ? totalSpent / priced.length : 0;
+    const saved = dated.filter((x) => x.bucket === "returned").reduce((s, x) => s + (x.price ?? 0), 0);
+
+    // Monthly spend, oldest → newest, only months that have data.
+    const byMonth = new Map<string, number>();
+    for (const x of dated) {
+      if (!x.date || x.price === null) continue;
+      byMonth.set(x.date.slice(0, 7), (byMonth.get(x.date.slice(0, 7)) ?? 0) + x.price);
+    }
+    const months = [...byMonth.entries()].sort((m, n) => m[0].localeCompare(n[0])).slice(-6)
+      .map(([ym, total]) => ({
+        label: new Date(ym + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" }),
+        total,
+      }));
+
+    // Retailers by spend (falling back to count when unpriced).
+    const byRetailer = new Map<string, { spend: number; count: number }>();
+    for (const x of dated) {
+      const r = x.p.retailer || "Unknown";
+      const cur = byRetailer.get(r) ?? { spend: 0, count: 0 };
+      cur.spend += x.price ?? 0;
+      cur.count += 1;
+      byRetailer.set(r, cur);
+    }
+    const retailers = [...byRetailer.entries()]
+      .sort((m, n) => n[1].spend - m[1].spend || n[1].count - m[1].count)
+      .slice(0, 6)
+      .map(([name, v]) => ({ name, ...v }));
+
+    // Outcomes: how decisions actually land.
+    const counts = { deciding: 0, to_return: 0, returned: 0, kept: 0, missed: 0 };
+    for (const x of dated) counts[x.bucket]++;
+    const resolved = counts.returned + counts.kept + counts.missed;
+    const returnRate = resolved ? Math.round((counts.returned / resolved) * 100) : null;
+
+    // Shopping days of the week.
+    const weekdays = Array(7).fill(0) as number[];
+    for (const x of dated) {
+      if (x.date) weekdays[new Date(x.date + "T00:00:00").getDay()]++;
+    }
+
+    return { totalSpent, avgOrder, saved, count: purchases.length, months, retailers, counts, resolved, returnRate, weekdays };
+  }, [purchases]);
+
+  if (purchases.length === 0) {
+    return (
+      <div style={{ background: "#fff", border: "1px dashed #eec2d0", borderRadius: 22, padding: "36px 28px", textAlign: "center", color: "#7d7078", fontSize: 14 }}>
+        Analytics appear once you have purchases tracked.
+      </div>
+    );
+  }
+
+  const card = { background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)", minWidth: 0 } as const;
+  const h2 = { fontFamily: SERIF, fontWeight: 400, fontSize: 22, margin: "0 0 16px" } as const;
+  const maxMonth = Math.max(...a.months.map((m) => m.total), 1);
+  const maxRetailer = Math.max(...a.retailers.map((r) => r.spend), 1);
+  const maxDay = Math.max(...a.weekdays, 1);
+  const outcomeMeta: { key: keyof typeof a.counts; label: string; color: string }[] = [
+    { key: "deciding", label: "Deciding", color: "#d9a13f" },
+    { key: "to_return", label: "To return", color: "#ef8560" },
+    { key: "returned", label: "Returned", color: "#5fb897" },
+    { key: "kept", label: "Kept", color: "#9a8c92" },
+    { key: "missed", label: "Missed", color: "#d94f7d" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {/* headline numbers */}
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 18 }}>
+        {[
+          { label: "Tracked spending", value: money(a.totalSpent), sub: `${a.count} purchases`, color: "#d94f7d", tint: "#fdeaf1" },
+          { label: "Money back", value: money(a.saved), sub: `${a.counts.returned} returns completed`, color: "#5fb897", tint: "#e8f4ee" },
+          { label: "Average order", value: money(a.avgOrder), sub: "across priced purchases", color: "#b79be0", tint: "#f2ecfb" },
+          { label: "Return rate", value: a.returnRate !== null ? `${a.returnRate}%` : "—", sub: `of ${a.resolved} decided`, color: "#ef8560", tint: "#fdeee7" },
+        ].map((s) => (
+          <div key={s.label} style={card}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: "#9a8c92" }}>{s.label}</span>
+              <span style={{ width: 30, height: 30, borderRadius: 9, background: s.tint, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color }} />
+              </span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontSize: 12.5, color: "#a99ba0", marginTop: 7 }}>{s.sub}</div>
+          </div>
+        ))}
+      </section>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* spending by month */}
+        <div style={card}>
+          <h2 style={h2}>Spending by month</h2>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height: 150, padding: "0 4px" }}>
+            {a.months.map((m) => (
+              <div key={m.label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#7d7078" }}>{money(m.total)}</div>
+                <div style={{ width: "100%", maxWidth: 46, height: Math.max(6, (m.total / maxMonth) * 100), background: "linear-gradient(180deg, #e8749a, #d94f7d)", borderRadius: 8 }} />
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#b0a2a7", textTransform: "uppercase" }}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* top retailers */}
+        <div style={card}>
+          <h2 style={h2}>Top retailers</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+            {a.retailers.map((r, i) => (
+              <div key={r.name}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</span>
+                  <span style={{ color: "#9a8c92", flexShrink: 0, marginLeft: 10 }}>
+                    {r.spend > 0 ? money(r.spend) : ""} · {r.count} item{r.count === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div style={{ height: 8, background: "#f6ecec", borderRadius: 6, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.max(4, (r.spend / maxRetailer) * 100)}%`, height: "100%", background: PALETTE[i % PALETTE.length], borderRadius: 6 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* outcomes */}
+        <div style={card}>
+          <h2 style={h2}>Where purchases end up</h2>
+          <div style={{ display: "flex", height: 14, borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
+            {outcomeMeta.map((o) =>
+              a.counts[o.key] > 0 ? (
+                <div key={o.key} style={{ flex: a.counts[o.key], background: o.color }} />
+              ) : null
+            )}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 18px" }}>
+            {outcomeMeta.map((o) => (
+              <span key={o.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "#7d7078" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: o.color }} />
+                {o.label} · {a.counts[o.key]}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* shopping days */}
+        <div style={card}>
+          <h2 style={h2}>Shopping days</h2>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 120, padding: "0 4px" }}>
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d, i) => (
+              <div key={d} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#7d7078" }}>{a.weekdays[i] || ""}</div>
+                <div style={{ width: "100%", maxWidth: 34, height: Math.max(4, (a.weekdays[i] / maxDay) * 80), background: a.weekdays[i] === maxDay ? "#d94f7d" : "#f0cdd9", borderRadius: 7 }} />
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#b0a2a7" }}>{d}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Compact closing-soon table from the design: colored retailer, tight
 // columns, status select — no edit/delete (the Purchases panel has those).
