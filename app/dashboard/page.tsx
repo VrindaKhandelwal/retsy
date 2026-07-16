@@ -223,59 +223,48 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#fbf1ef", fontFamily: SANS, color: "#2e2530", display: "grid", gridTemplateColumns: "240px 1fr" }}>
+    <div style={{ minHeight: "100vh", background: "#fbf1ef", fontFamily: SANS, color: "#2e2530" }}>
       <link rel="stylesheet" href={FONTS_URL} />
 
-      {/* SIDEBAR */}
-      <aside style={{ borderRight: "1px solid #f1e2e3", padding: "30px 22px", display: "flex", flexDirection: "column", gap: 28, position: "sticky", top: 0, height: "100vh" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 11, background: "linear-gradient(140deg, #e8749a, #d94f7d)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(217,79,125,0.32)" }}>
-            <div style={{ width: 13, height: 13, border: "2.5px solid #fff", borderRadius: "50%", borderRightColor: "transparent" }} />
-          </div>
-          <span style={{ fontFamily: SERIF, fontSize: 24, letterSpacing: 0.2 }}>Retsy</span>
-        </div>
-
-        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {nav.map((n) => {
-            const activeNav = view === n.key;
-            return (
-              <div
-                key={n.key}
-                onClick={() => setView(n.key)}
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "11px 13px", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: activeNav ? "#2e2530" : "#7d7078", background: activeNav ? "#fdeef3" : "transparent" }}
-              >
-                <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: activeNav ? "#d94f7d" : "#e2d3d6" }} />
-                  {n.label}
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: activeNav ? "#d94f7d" : "#c2b4b9" }}>{n.count}</span>
-              </div>
-            );
-          })}
-        </nav>
-
-        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
-          <GmailConnect email={email} token={token} account={gmailAccount} onDisconnected={() => setGmailAccount(null)} />
-          <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 16, padding: 15 }}>
-            <div style={{ fontFamily: SERIF, fontSize: 15, lineHeight: 1.25, marginBottom: 4 }}>Track anything.</div>
-            <div style={{ fontSize: 12, color: "#9a8c92", lineHeight: 1.4 }}>
-              Forward any order confirmation to <strong style={{ color: "#2e2530" }}>returns@retsy.xyz</strong> and we&apos;ll watch the window.
+      {/* TOP NAV BAR */}
+      <header style={{ borderBottom: "1px solid #f1e2e3" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "16px 24px", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(140deg, #e8749a, #d94f7d)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(217,79,125,0.32)" }}>
+              <div style={{ width: 12, height: 12, border: "2.5px solid #fff", borderRadius: "50%", borderRightColor: "transparent" }} />
             </div>
+            <span style={{ fontFamily: SERIF, fontSize: 23, letterSpacing: 0.2 }}>Retsy</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(140deg, #f7cdda, #e8749a)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 13, flexShrink: 0 }}>
+
+          <nav style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, flexWrap: "wrap" }}>
+            {nav.map((n) => {
+              const activeNav = view === n.key;
+              return (
+                <div
+                  key={n.key}
+                  onClick={() => setView(n.key)}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 22, fontSize: 14.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", color: activeNav ? "#fff" : "#7d7078", background: activeNav ? "#d94f7d" : "transparent", boxShadow: activeNav ? "0 6px 16px rgba(217,79,125,0.25)" : "none" }}
+                >
+                  {n.label}
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: activeNav ? "rgba(255,255,255,0.85)" : "#c2b4b9" }}>{n.count}</span>
+                </div>
+              );
+            })}
+          </nav>
+
+          <GmailConnect email={email} token={token} account={gmailAccount} onDisconnected={() => setGmailAccount(null)} />
+
+          <div title={email} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(140deg, #f7cdda, #e8749a)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 13, flexShrink: 0 }}>
               {displayName.charAt(0)}
             </div>
-            <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{fullName || displayName}</div>
-              <div style={{ fontSize: 11, color: "#b0a2a7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
-            </div>
+            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>{fullName || displayName}</div>
           </div>
         </div>
-      </aside>
+      </header>
 
       {/* MAIN */}
-      <main style={{ padding: "34px 40px 48px", minWidth: 0 }}>
+      <main style={{ padding: "30px 24px 48px", minWidth: 0 }}>
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
           {banner === "connected" && !syncing && (
             <div style={{ marginBottom: 18, background: "#e8f4ee", color: "#3d7d63", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
@@ -416,6 +405,11 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
               )}
             </section>
           )}
+
+          <p style={{ marginTop: 32, fontSize: 12.5, color: "#b0a2a7", textAlign: "center" }}>
+            Track anything — forward any order confirmation to{" "}
+            <strong style={{ color: "#2e2530" }}>returns@retsy.xyz</strong> and we&apos;ll watch the window.
+          </p>
         </div>
       </main>
 
