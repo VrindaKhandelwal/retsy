@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
     try {
       const since = account.last_synced_at
         ? new Date(new Date(account.last_synced_at).getTime() - WATERMARK_OVERLAP_MS)
-        : new Date(Date.now() - 30 * 86_400_000);
+        : new Date(Date.now() - 60 * 86_400_000);
       const afterEpoch = Math.floor(since.getTime() / 1000);
 
       // category:purchases is Gmail's own receipt classifier — personal

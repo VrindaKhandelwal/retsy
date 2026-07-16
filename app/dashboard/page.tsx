@@ -194,7 +194,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
   const nav: { key: View; label: string; count: number }[] = [
     { key: "dashboard", label: "Dashboard", count: d.open.length },
     { key: "all", label: "All Purchases", count: d.all.length },
-    { key: "kept", label: "Kept Purchases", count: d.kept.length },
+    { key: "kept", label: "Kept", count: d.kept.length },
     { key: "returns", label: "Returns", count: d.returnsView.length },
   ];
 
@@ -207,7 +207,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
 
   const listMeta: Record<Exclude<View, "dashboard">, { title: string; sub: string; rows: typeof d.all }> = {
     all: { title: "All Purchases", sub: `${d.all.length} purchases total`, rows: [...d.all].sort((a, b) => (b.p.created_at ?? "").localeCompare(a.p.created_at ?? "")) },
-    kept: { title: "Kept Purchases", sub: "window missed or kept on purpose", rows: d.kept },
+    kept: { title: "Kept", sub: "window missed or kept on purpose", rows: d.kept },
     returns: { title: "Returns", sub: `${d.returnsView.filter((x) => x.bucket === "to_return").length} to return · ${d.returned.length} completed`, rows: d.returnsView },
   };
 
@@ -273,7 +273,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
           {banner === "connected" && !syncing && (
             <div style={{ marginBottom: 18, background: "#e8f4ee", color: "#3d7d63", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
-              Gmail connected — we&apos;re scanning your last 30 days of receipts now.
+              Gmail connected — we&apos;re scanning your last 2 months of receipts now.
             </div>
           )}
           {syncing && (

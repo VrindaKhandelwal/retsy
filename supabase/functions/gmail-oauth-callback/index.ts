@@ -14,7 +14,7 @@ import { exchangeCode, parseIdTokenClaims } from "../_shared/gmail.ts";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.retsy.xyz";
 const STATE_MAX_AGE_MS = 15 * 60 * 1000;
 // How far back the first sync looks for receipts.
-const INITIAL_LOOKBACK_DAYS = 30;
+const INITIAL_LOOKBACK_DAYS = 60;
 
 function redirect(location: string): Response {
   return new Response(null, { status: 302, headers: { Location: location } });
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       return redirect(dashboardUrl(user.email, user.dashboard_token, "error", "db_upsert"));
     }
 
-    // Kick off the first sync immediately (30-day backfill) instead of
+    // Kick off the first sync immediately (60-day backfill) instead of
     // waiting for the daily cron, so the dashboard populates right after
     // connecting. waitUntil keeps the function alive past the redirect;
     // the sync itself is idempotent so overlapping with cron is harmless.
