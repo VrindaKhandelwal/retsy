@@ -8,7 +8,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signup } from "@/lib/api";
+import { gmailConnectUrl, signup } from "@/lib/api";
 import type { Purchase } from "@/lib/types";
 import { bucketOf, daysUntil, formatDeadline, type Bucket } from "@/lib/purchaseGroups";
 import { useDashboardData, type StatusAction } from "@/components/useDashboardData";
@@ -325,11 +325,30 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
           </section>
 
           {purchases.length === 0 && (
-            <div style={{ background: "#fff", border: "1px dashed #eec2d0", borderRadius: 22, padding: "36px 28px", textAlign: "center" }}>
-              <div style={{ fontFamily: SERIF, fontSize: 22, marginBottom: 8 }}>Nothing tracked yet</div>
-              <div style={{ fontSize: 14, color: "#7d7078", maxWidth: 460, margin: "0 auto" }}>
-                Connect your Gmail from the sidebar for automatic tracking, or forward any order
-                confirmation to <strong style={{ color: "#2e2530" }}>returns@retsy.xyz</strong>.
+            <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "52px 28px", textAlign: "center", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
+              <div style={{ fontFamily: SERIF, fontSize: 34, lineHeight: 1.1, marginBottom: 10 }}>
+                Nothing tracked <span style={{ fontStyle: "italic", color: "#d94f7d" }}>yet</span>
+              </div>
+              <div style={{ fontSize: 15.5, fontWeight: 600, color: "#7d7078", maxWidth: 440, margin: "0 auto" }}>
+                Connect your Gmail and we&apos;ll find your receipts automatically —
+                every return window tracked from day one.
+              </div>
+              {gmailAccount?.status === "active" ? (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 9, marginTop: 26, background: "#e8f4ee", color: "#3d7d63", fontSize: 14.5, fontWeight: 700, padding: "13px 24px", borderRadius: 13 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#5fb897" }} />
+                  Gmail connected — your receipts will appear after the next scan
+                </div>
+              ) : (
+                <div
+                  onClick={() => (window.location.href = gmailConnectUrl(email, token))}
+                  style={{ display: "inline-block", marginTop: 26, background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontSize: 15.5, fontWeight: 800, padding: "15px 34px", borderRadius: 14, cursor: "pointer", boxShadow: "0 10px 26px rgba(217,79,125,0.35)" }}
+                >
+                  Connect Gmail
+                </div>
+              )}
+              <div style={{ fontSize: 13, color: "#a99ba0", marginTop: 18 }}>
+                Prefer not to link your inbox? Forward any order confirmation to{" "}
+                <strong style={{ color: "#2e2530" }}>returns@retsy.xyz</strong> instead.
               </div>
             </div>
           )}
