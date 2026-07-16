@@ -23,6 +23,7 @@ const STATUS_AFTER_ACTION: Record<Exclude<StatusAction, "delete">, PurchaseStatu
 export function useDashboardData(email: string, token: string) {
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
   const [gmailAccount, setGmailAccount] = useState<GmailAccount | null>(null);
+  const [fullName, setFullName] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -33,6 +34,7 @@ export function useDashboardData(email: string, token: string) {
     } else {
       setPurchases(data.purchases);
       setGmailAccount(data.gmail_account ?? null);
+      setFullName(data.full_name ?? null);
     }
   }
 
@@ -56,5 +58,5 @@ export function useDashboardData(email: string, token: string) {
     setBusyId(null);
   }
 
-  return { purchases, gmailAccount, setGmailAccount, loadError, busyId, act, refresh };
+  return { purchases, gmailAccount, setGmailAccount, fullName, loadError, busyId, act, refresh };
 }

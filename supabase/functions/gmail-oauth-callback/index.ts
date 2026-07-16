@@ -9,7 +9,7 @@
 // (?gmail=connected or ?gmail=error) — never a dead-end page.
 
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
-import { exchangeCode, parseIdTokenEmail } from "../_shared/gmail.ts";
+import { exchangeCode, parseIdTokenClaims } from "../_shared/gmail.ts";
 
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.retsy.xyz";
 const STATE_MAX_AGE_MS = 15 * 60 * 1000;
@@ -83,7 +83,16 @@ Deno.serve(async (req) => {
 
   try {
     const tokens = await exchangeCode(code);
-    const googleEmail = parseIdTokenEmail(tokens.id_token);
+    const claims = parseIdTokenClaims(tokens.id_token);
+    const googleEmail = claims.email;
+
+    // Capture the user's real name for the dashboard greeting (best-effort).
+    if (claims.fullName) {
+      await supabase
+        .from("users")
+        .update({ full_name: claims.fullName })
+        .eq("id", user.id);
+    }
 
     const initialWatermark = new Date(
       Date.now() - INITIAL_LOOKBACK_DAYS * 86_400_000

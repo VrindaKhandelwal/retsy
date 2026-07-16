@@ -122,7 +122,7 @@ type View = "dashboard" | "all" | "kept" | "returns";
 
 function Dashboard({ email, token, gmailFlag }: { email: string; token: string; gmailFlag: string | null }) {
   const router = useRouter();
-  const { purchases, gmailAccount, setGmailAccount, loadError, busyId, act, refresh } =
+  const { purchases, gmailAccount, setGmailAccount, fullName, loadError, busyId, act, refresh } =
     useDashboardData(email, token);
   const [view, setView] = useState<View>("dashboard");
   const [sort, setSort] = useState<"date" | "cost">("date");
@@ -183,8 +183,11 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const name = email.split("@")[0].replace(/[^a-zA-Z]/g, " ").trim().split(/\s+/)[0];
-  const displayName = name.charAt(0).toUpperCase() + name.slice(1);
+  // Real first name from the Google profile when Gmail is connected;
+  // otherwise a best-effort guess from the email address.
+  const emailGuess = email.split("@")[0].replace(/[^a-zA-Z]/g, " ").trim().split(/\s+/)[0];
+  const firstName = fullName?.trim().split(/\s+/)[0] || emailGuess;
+  const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1);
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   const nav: { key: View; label: string; count: number }[] = [
@@ -263,7 +266,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
               {displayName.charAt(0)}
             </div>
             <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{displayName}</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{fullName || displayName}</div>
               <div style={{ fontSize: 11, color: "#b0a2a7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
             </div>
           </div>

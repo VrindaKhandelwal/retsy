@@ -7,7 +7,8 @@ const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const OAUTH_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 
-const SCOPES = "https://www.googleapis.com/auth/gmail.readonly openid email";
+// profile adds the user's real name to the id_token for the dashboard greeting.
+const SCOPES = "https://www.googleapis.com/auth/gmail.readonly openid email profile";
 
 // Thrown when Google reports invalid_grant — the user revoked access, or
 // the refresh token expired (7 days while the OAuth app is in Testing).
@@ -82,7 +83,10 @@ export async function exchangeCode(code: string): Promise<{
 
 // The id_token came straight from Google's token endpoint over TLS, so we
 // can read its payload without signature verification.
-export function parseIdTokenEmail(idToken: string): string {
+export function parseIdTokenClaims(idToken: string): {
+  email: string;
+  fullName: string | null;
+} {
   const payload = idToken.split(".")[1];
   const decoded = JSON.parse(
     new TextDecoder().decode(base64UrlDecode(payload))
@@ -91,7 +95,7 @@ export function parseIdTokenEmail(idToken: string): string {
   if (!email) {
     throw new Error("id_token has no email claim");
   }
-  return email;
+  return { email, fullName: decoded.name?.toString().trim() || null };
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<string> {

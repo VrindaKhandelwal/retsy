@@ -58,7 +58,7 @@ export function confirmPurchase(
 // `poll` marks background auto-refreshes so they aren't counted as
 // dashboard visits server-side.
 export function listPurchases(email: string, token: string, poll = false) {
-  return call<{ purchases: any[]; gmail_account: any | null }>(
+  return call<{ purchases: any[]; gmail_account: any | null; full_name: string | null }>(
     `list-purchases?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}${poll ? "&poll=1" : ""}`
   );
 }

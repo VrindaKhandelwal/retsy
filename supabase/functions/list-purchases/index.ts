@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
 
   const { data: user, error: userError } = await supabase
     .from("users")
-    .select("id, dashboard_token")
+    .select("id, dashboard_token, full_name")
     .eq("email", email)
     .maybeSingle();
 
@@ -69,5 +69,9 @@ Deno.serve(async (req) => {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  return jsonResponse({ purchases, gmail_account: gmailAccount ?? null });
+  return jsonResponse({
+    purchases,
+    gmail_account: gmailAccount ?? null,
+    full_name: user.full_name ?? null,
+  });
 });
