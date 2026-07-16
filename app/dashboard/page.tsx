@@ -388,7 +388,13 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
               {listMeta[view].rows.length === 0 ? (
                 <div style={{ padding: "28px 8px", textAlign: "center", fontSize: 13.5, color: "#b0a2a7" }}>Nothing here yet.</div>
               ) : (
-                <PurchaseTable rows={listMeta[view].rows} busyId={busyId} act={act} showDelete />
+                <PurchaseTable
+                  rows={listMeta[view].rows}
+                  busyId={busyId}
+                  act={act}
+                  showDelete
+                  showRefund={view === "returns"}
+                />
               )}
             </section>
           )}
@@ -408,18 +414,38 @@ const SELECT_VALUE: Record<Bucket, string> = {
   missed: "undecided",
 };
 
+function RefundPill({ p }: { p: Purchase }) {
+  if (p.refund_status === "received") {
+    return (
+      <span style={{ display: "inline-block", background: "#e8f4ee", color: "#5fb897", fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>
+        Refund received{p.refund_amount ? ` · ${p.refund_amount}` : ""}
+      </span>
+    );
+  }
+  if (p.refund_status === "pending") {
+    return (
+      <span style={{ display: "inline-block", background: "#faf1de", color: "#d9a13f", fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>
+        Refund pending
+      </span>
+    );
+  }
+  return <span style={{ color: "#d9c4ca", fontSize: 13 }}>—</span>;
+}
+
 function PurchaseTable({
   rows,
   busyId,
   act,
   showDelete,
+  showRefund = false,
 }: {
   rows: { p: Purchase; bucket: Bucket; days: number }[];
   busyId: string | null;
   act: (id: string, a: StatusAction) => void;
   showDelete: boolean;
+  showRefund?: boolean;
 }) {
-  const grid = `minmax(110px,1.3fr) minmax(140px,1.9fr) minmax(64px,0.7fr) minmax(86px,0.8fr) minmax(140px,1fr)${showDelete ? " 28px" : ""}`;
+  const grid = `minmax(110px,1.3fr) minmax(140px,1.9fr) minmax(64px,0.7fr) minmax(86px,0.8fr)${showRefund ? " minmax(130px,1fr)" : ""} minmax(140px,1fr)${showDelete ? " 28px" : ""}`;
 
   function onSelect(p: Purchase, value: string) {
     if (value === "undecided") act(p.id, "undecided");
@@ -435,6 +461,7 @@ function PurchaseTable({
         <div>Item</div>
         <div>Price</div>
         <div>Days left</div>
+        {showRefund && <div>Refund</div>}
         <div>Action</div>
         {showDelete && <div />}
       </div>
@@ -473,6 +500,11 @@ function PurchaseTable({
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
               <span style={{ fontSize: 13, fontWeight: 700, color: s.color, whiteSpace: "nowrap" }}>{daysText}</span>
             </div>
+            {showRefund && (
+              <div>
+                <RefundPill p={p} />
+              </div>
+            )}
             <select
               disabled={busy}
               value={SELECT_VALUE[bucket]}

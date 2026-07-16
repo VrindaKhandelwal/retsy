@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
   let scanned = 0;
   let added = 0;
   let delivered = 0;
+  let refunded = 0;
   let skipped = 0;
   let hasBacklog = false;
 
@@ -195,13 +196,22 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          // Return labels / refund emails quote order details like receipts
-          // do, but they're not purchases. They also don't prove the return
-          // happened (a generated label may never be used), so we don't
-          // touch the matching purchase's status — the user marks it
-          // returned from the dashboard.
+          // Return labels quote order details like receipts do, but they're
+          // not purchases — and a generated label doesn't prove the return
+          // shipped, so they never touch status. Refund notifications DO
+          // prove it: mark the refund received (and the purchase returned).
           if (extracted.email_type === "return_notification") {
             skipped++;
+            continue;
+          }
+
+          if (extracted.email_type === "refund_notification") {
+            const didUpdate = await applyRefund(supabase, account.user_id, extracted);
+            if (didUpdate) {
+              refunded++;
+            } else {
+              skipped++;
+            }
             continue;
           }
 
@@ -339,11 +349,78 @@ Deno.serve(async (req) => {
     scanned,
     added,
     delivered,
+    refunded,
     skipped,
     backlog: hasBacklog,
     chain,
   });
 });
+
+// Match a refund notification to the purchase it refunds and record it.
+// A refund is proof the return happened, so a still-open purchase is also
+// marked returned (with its unsent reminders cancelled). Returns true if
+// a purchase was updated.
+async function applyRefund(
+  supabase: any,
+  userId: string,
+  extracted: { retailer: string; order_number: string | null; refund_amount: string | null }
+): Promise<boolean> {
+  const OPEN = ["pending", "confirmed", "to_return"];
+  let purchase: { id: string; status: string; refund_status: string | null } | null = null;
+
+  if (extracted.order_number) {
+    const { data } = await supabase
+      .from("purchases")
+      .select("id, status, refund_status")
+      .eq("user_id", userId)
+      .eq("order_number", extracted.order_number)
+      .in("status", [...OPEN, "returned"])
+      .limit(1);
+    purchase = data?.[0] ?? null;
+  }
+
+  if (!purchase && extracted.retailer && extracted.retailer !== "Unknown") {
+    // Most plausible candidate: newest purchase from the same retailer that
+    // hasn't seen a refund yet — preferring ones already marked returned.
+    const { data } = await supabase
+      .from("purchases")
+      .select("id, status, refund_status")
+      .eq("user_id", userId)
+      .ilike("retailer", extracted.retailer)
+      .is("refund_status", null)
+      .in("status", [...OPEN, "returned"])
+      .order("status", { ascending: false }) // 'to_return'/'returned' sort after 'confirmed'
+      .order("order_date", { ascending: false })
+      .limit(1);
+    purchase = data?.[0] ?? null;
+  }
+
+  if (!purchase || purchase.refund_status === "received") {
+    return false;
+  }
+
+  const { error } = await supabase
+    .from("purchases")
+    .update({
+      refund_status: "received",
+      refund_amount: extracted.refund_amount,
+      status: "returned",
+    })
+    .eq("id", purchase.id);
+
+  if (error) {
+    console.error(`refund update failed for purchase ${purchase.id}`, error);
+    return false;
+  }
+
+  await supabase
+    .from("reminders")
+    .delete()
+    .eq("purchase_id", purchase.id)
+    .is("sent_at", null);
+
+  return true;
+}
 
 // Match a delivery notification to an existing purchase and recompute its
 // return deadline from the delivery date. Match by order number first;

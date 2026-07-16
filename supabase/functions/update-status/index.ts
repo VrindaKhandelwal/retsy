@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
   // Confirm the purchase belongs to this user before touching it.
   const { data: purchase, error: purchaseError } = await supabase
     .from("purchases")
-    .select("id, user_id, status, return_deadline")
+    .select("id, user_id, status, return_deadline, refund_status")
     .eq("id", purchase_id)
     .maybeSingle();
 
@@ -84,9 +84,17 @@ Deno.serve(async (req) => {
 
   const newStatus = STATUS_BY_ACTION[action];
 
+  // Refund tracking: marking returned starts the refund clock ("pending"
+  // until a refund email arrives). Un-marking clears a pending refund;
+  // a received refund is a fact and survives status changes.
+  const updates: Record<string, unknown> = { status: newStatus };
+  if (purchase.refund_status !== "received") {
+    updates.refund_status = action === "returned" ? "pending" : null;
+  }
+
   const { error: updateError } = await supabase
     .from("purchases")
-    .update({ status: newStatus })
+    .update(updates)
     .eq("id", purchase_id);
 
   if (updateError) {

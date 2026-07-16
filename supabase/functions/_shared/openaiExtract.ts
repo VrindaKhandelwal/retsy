@@ -11,16 +11,19 @@ export interface ExtractedPurchase {
   // Defaults to true when the model omits it, so the V1 forwarding flow
   // (where the user vouched for the email by forwarding it) is unaffected.
   is_returnable_purchase: boolean;
-  // Delivery notifications don't create purchases; gmail-sync uses them to
-  // set delivery_date on the matching purchase and recompute its deadline.
-  // Return notifications (return labels, refund confirmations) mark the
-  // matching purchase as returned.
+  // Non-order emails update the matching purchase instead of creating one:
+  // delivery notifications set delivery_date and recompute the deadline;
+  // refund notifications mark the refund received (and the purchase
+  // returned — a refund is proof the return happened). return_notification
+  // (labels, return-started) alone proves nothing and is ignored.
   email_type:
     | "order_confirmation"
     | "delivery_notification"
     | "return_notification"
+    | "refund_notification"
     | "other";
   delivery_date: string | null; // ISO yyyy-mm-dd, delivery notifications only
+  refund_amount: string | null; // as printed (e.g. "$47.84"), refund notifications only
 }
 
 const SYSTEM_PROMPT = `You extract structured purchase information from forwarded order
@@ -36,8 +39,9 @@ Return ONLY a JSON object with exactly these fields, nothing else:
   "order_total": string|null, // total amount paid for the order, as printed (e.g. "$45.99", "£32.00"). Null if not present.
   "confidence": number,      // your own confidence (0.0 to 1.0) that the above fields are correct and complete
   "is_returnable_purchase": boolean, // see rules below
-  "email_type": string,      // "order_confirmation" | "delivery_notification" | "return_notification" | "other" — see rules below
-  "delivery_date": string|null // ISO 8601 date (YYYY-MM-DD) the package was delivered, ONLY for delivery notifications. Null otherwise or if not stated.
+  "email_type": string,      // "order_confirmation" | "delivery_notification" | "return_notification" | "refund_notification" | "other" — see rules below
+  "delivery_date": string|null, // ISO 8601 date (YYYY-MM-DD) the package was delivered, ONLY for delivery notifications. Null otherwise or if not stated.
+  "refund_amount": string|null // amount refunded as printed (e.g. "$47.84"), ONLY for refund notifications. Null otherwise or if not stated.
 }
 
 email_type rules:
@@ -47,8 +51,11 @@ email_type rules:
 - "delivery_notification": a shipping-carrier or retailer email saying a package
   WAS DELIVERED (not merely shipped or out for delivery). Extract the retailer,
   order_number if present, and delivery_date (null if the exact date isn't stated).
-- "return_notification": the user is RETURNING an item — return label issued
-  (USPS/QR code), return started/received confirmations, refund issued/processed.
+- "refund_notification": money is coming back to the customer — refund issued,
+  refund processed, refund on its way, credit applied for a returned item.
+  Extract the retailer, order_number if present, and refund_amount.
+- "return_notification": the user is returning an item but NO money has moved yet —
+  return label issued (USPS/QR code), return started, return package received.
   Extract the retailer and order_number if present.
 - "other": everything else — shipped/out-for-delivery updates, marketing, and
   anything that is none of the above.
@@ -137,9 +144,11 @@ export async function extractPurchaseFromEmail(
     email_type:
       parsed.email_type === "delivery_notification" ||
       parsed.email_type === "return_notification" ||
+      parsed.email_type === "refund_notification" ||
       parsed.email_type === "other"
         ? parsed.email_type
         : "order_confirmation",
     delivery_date: parsed.delivery_date || null,
+    refund_amount: parsed.refund_amount?.toString().trim() || null,
   };
 }

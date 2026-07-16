@@ -51,7 +51,20 @@ export function useDashboardData(email: string, token: string) {
         action === "delete"
           ? prev?.filter((p) => p.id !== id) ?? null
           : prev?.map((p) =>
-              p.id === id ? { ...p, status: STATUS_AFTER_ACTION[action] } : p
+              p.id === id
+                ? {
+                    ...p,
+                    status: STATUS_AFTER_ACTION[action],
+                    // Mirror the server: returned starts the refund clock,
+                    // un-marking clears a pending one; 'received' is a fact.
+                    refund_status:
+                      p.refund_status === "received"
+                        ? "received"
+                        : action === "returned"
+                          ? "pending"
+                          : null,
+                  }
+                : p
             ) ?? null
       );
     }

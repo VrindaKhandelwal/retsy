@@ -22,6 +22,9 @@ export interface Purchase {
   source?: PurchaseSource;
   delivery_date?: string | null;
   deadline_basis?: "order_date" | "delivery_date";
+  // pending = returned, money not seen yet; received = refund email detected
+  refund_status?: "pending" | "received" | null;
+  refund_amount?: string | null;
   created_at?: string;
 }
 
