@@ -8,7 +8,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { gmailConnectUrl, signup } from "@/lib/api";
+import { addPurchase, editPurchase, gmailConnectUrl, signup, type PurchaseEdits } from "@/lib/api";
 import type { Purchase } from "@/lib/types";
 import { bucketOf, daysUntil, formatDeadline, type Bucket } from "@/lib/purchaseGroups";
 import { useDashboardData, type StatusAction } from "@/components/useDashboardData";
@@ -126,6 +126,7 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
     useDashboardData(email, token);
   const [view, setView] = useState<View>("dashboard");
   const [sort, setSort] = useState<"date" | "cost">("date");
+  const [editor, setEditor] = useState<{ mode: "add" } | { mode: "edit"; p: Purchase } | null>(null);
   const [banner, setBanner] = useState<"connected" | "error" | null>(
     gmailFlag === "connected" || gmailFlag === "error" ? gmailFlag : null
   );
@@ -309,6 +310,12 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
               </h1>
               <p style={{ margin: "9px 0 0", fontSize: 15, color: "#7d7078" }}>{headerSub}</p>
             </div>
+            <div
+              onClick={() => setEditor({ mode: "add" })}
+              style={{ background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px 20px", borderRadius: 13, cursor: "pointer", boxShadow: "0 8px 20px rgba(217,79,125,0.3)", whiteSpace: "nowrap" }}
+            >
+              + Add purchase
+            </div>
           </header>
 
           {/* STAT CARDS */}
@@ -374,7 +381,17 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
                   ))}
                 </div>
               </div>
-              <PurchaseTable rows={sortedDeadlines} busyId={busyId} act={act} showDelete={false} />
+              <PurchaseTable
+                rows={sortedDeadlines}
+                busyId={busyId}
+                act={act}
+                showDelete={false}
+                onEdit={(p) => setEditor({ mode: "edit", p })}
+              />
+              <p style={{ margin: "14px 8px 0", fontSize: 12, color: "#b0a2a7" }}>
+                Deadlines are estimates read from your emails and retailer policies —
+                occasionally we get one wrong. Click ✎ on any purchase to fix it.
+              </p>
             </div>
           )}
 
@@ -394,12 +411,133 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
                   act={act}
                   showDelete
                   showRefund={view === "returns"}
+                  onEdit={(p) => setEditor({ mode: "edit", p })}
                 />
               )}
             </section>
           )}
         </div>
       </main>
+
+      {editor && (
+        <PurchaseEditor
+          editor={editor}
+          onClose={() => setEditor(null)}
+          onSave={async (fields) => {
+            const result =
+              editor.mode === "add"
+                ? await addPurchase(email, token, {
+                    item_name: fields.item_name!,
+                    retailer: fields.retailer!,
+                    return_deadline: fields.return_deadline!,
+                    order_total: fields.order_total || undefined,
+                  })
+                : await editPurchase(email, token, editor.p.id, fields);
+            if (!result.error) {
+              await refresh({ poll: true });
+              setEditor(null);
+            }
+            return result.error ?? null;
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Add / edit modal ─────────────────────────────────────────────────────
+
+function PurchaseEditor({
+  editor,
+  onClose,
+  onSave,
+}: {
+  editor: { mode: "add" } | { mode: "edit"; p: Purchase };
+  onClose: () => void;
+  onSave: (fields: PurchaseEdits) => Promise<string | null>;
+}) {
+  const editing = editor.mode === "edit" ? editor.p : null;
+  const [itemName, setItemName] = useState(editing?.item_name ?? "");
+  const [retailer, setRetailer] = useState(editing?.retailer ?? "");
+  const [deadline, setDeadline] = useState(editing?.return_deadline ?? "");
+  const [total, setTotal] = useState(editing?.order_total ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const err = await onSave({
+      item_name: itemName.trim(),
+      retailer: retailer.trim(),
+      return_deadline: deadline,
+      order_total: total.trim(),
+    });
+    setSaving(false);
+    if (err) setError(err);
+  }
+
+  const field = { display: "block", width: "100%", fontFamily: SANS, fontSize: 14, border: "1px solid #f1e2e3", borderRadius: 10, padding: "10px 12px", marginTop: 6, background: "#fff" } as const;
+  const label = { fontSize: 12.5, fontWeight: 700, color: "#7d7078", display: "block", marginTop: 16 } as const;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(46,37,48,0.35)", display: "grid", placeItems: "center", zIndex: 50, padding: 20 }}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={handleSubmit}
+        style={{ background: "#fbf1ef", borderRadius: 22, padding: "26px 26px 22px", width: "100%", maxWidth: 420, boxShadow: "0 24px 60px rgba(46,37,48,0.25)" }}
+      >
+        <div style={{ fontFamily: SERIF, fontSize: 24 }}>
+          {editing ? "Edit purchase" : "Add a purchase"}
+        </div>
+        {editing ? (
+          <div style={{ fontSize: 12.5, color: "#9a8c92", marginTop: 4 }}>
+            Fix anything we read wrong — a new return date reschedules your reminders.
+          </div>
+        ) : (
+          <div style={{ fontSize: 12.5, color: "#9a8c92", marginTop: 4 }}>
+            For purchases we can&apos;t see — in-store buys, other inboxes.
+          </div>
+        )}
+
+        <label style={label}>
+          Item
+          <input required value={itemName} onChange={(e) => setItemName(e.target.value)} placeholder="Linen midi dress" style={field} />
+        </label>
+        <label style={label}>
+          Retailer
+          <input required value={retailer} onChange={(e) => setRetailer(e.target.value)} placeholder="Zara" style={field} />
+        </label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <label style={label}>
+            Return by
+            <input required type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={field} />
+          </label>
+          <label style={label}>
+            Price <span style={{ fontWeight: 400, color: "#b0a2a7" }}>(optional)</span>
+            <input value={total} onChange={(e) => setTotal(e.target.value)} placeholder="$45.99" style={field} />
+          </label>
+        </div>
+
+        {error && <p style={{ fontSize: 13, color: "#d94f7d", marginTop: 12 }}>{error}</p>}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}>
+          <button type="button" onClick={onClose} style={{ background: "transparent", border: "none", fontFamily: SANS, fontSize: 14, fontWeight: 600, color: "#9a8c92", cursor: "pointer", padding: "11px 14px" }}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            style={{ background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", border: "none", fontFamily: SANS, fontSize: 14, fontWeight: 700, padding: "11px 22px", borderRadius: 12, cursor: "pointer", boxShadow: "0 8px 20px rgba(217,79,125,0.3)", opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? "Saving…" : editing ? "Save changes" : "Add purchase"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -438,12 +576,14 @@ function PurchaseTable({
   act,
   showDelete,
   showRefund = false,
+  onEdit,
 }: {
   rows: { p: Purchase; bucket: Bucket; days: number }[];
   busyId: string | null;
   act: (id: string, a: StatusAction) => void;
   showDelete: boolean;
   showRefund?: boolean;
+  onEdit: (p: Purchase) => void;
 }) {
   const grid = `minmax(110px,1.3fr) minmax(140px,1.9fr) minmax(64px,0.7fr) minmax(86px,0.8fr)${showRefund ? " minmax(130px,1fr)" : ""} minmax(140px,1fr)${showDelete ? " 28px" : ""}`;
 
@@ -505,17 +645,28 @@ function PurchaseTable({
                 <RefundPill p={p} />
               </div>
             )}
-            <select
-              disabled={busy}
-              value={SELECT_VALUE[bucket]}
-              onChange={(e) => onSelect(p, e.target.value)}
-              style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, border: "1px solid transparent", borderRadius: 10, padding: "6px 8px", cursor: "pointer", background: s.tint, color: s.color }}
-            >
-              <option value="undecided">Undecided</option>
-              <option value="return">To Return</option>
-              <option value="kept">Keep</option>
-              <option value="returned">Return Complete</option>
-            </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+              <select
+                disabled={busy}
+                value={SELECT_VALUE[bucket]}
+                onChange={(e) => onSelect(p, e.target.value)}
+                style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, border: "1px solid transparent", borderRadius: 10, padding: "6px 8px", cursor: "pointer", background: s.tint, color: s.color, minWidth: 0 }}
+              >
+                <option value="undecided">Undecided</option>
+                <option value="return">To Return</option>
+                <option value="kept">Keep</option>
+                <option value="returned">Return Complete</option>
+              </select>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onEdit(p)}
+                title="Edit purchase"
+                style={{ border: "none", background: "transparent", color: "#c2b4b9", cursor: "pointer", fontSize: 14, padding: 0, flexShrink: 0 }}
+              >
+                ✎
+              </button>
+            </div>
             {showDelete && (
               <button
                 disabled={busy}

@@ -6,12 +6,17 @@
 //           "to_return" | "undecided"           -> still open; reminders
 //           stay live (to_return is exactly the state where the deadline
 //           matters most). "undecided" moves a purchase back to confirmed.
+//           "edit" + { edits }                  -> fix extracted fields
+//           (item_name, retailer, order_total, return_deadline); a deadline
+//           change reschedules the reminders.
 
 import { handleOptions, jsonResponse } from "../_shared/cors.ts";
 import { getSupabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { scheduleReminders } from "../_shared/reminders.ts";
 
-type Action = "returned" | "kept" | "delete" | "to_return" | "undecided";
+type Action = "returned" | "kept" | "delete" | "to_return" | "undecided" | "edit";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const STATUS_BY_ACTION: Record<Exclude<Action, "delete">, string> = {
   returned: "returned",
@@ -33,6 +38,12 @@ Deno.serve(async (req) => {
     token?: string;
     purchase_id?: string;
     action?: Action;
+    edits?: {
+      item_name?: string;
+      retailer?: string;
+      order_total?: string;
+      return_deadline?: string;
+    };
   };
   try {
     body = await req.json();
@@ -46,7 +57,7 @@ Deno.serve(async (req) => {
   if (!email || !token || !purchase_id || !action) {
     return jsonResponse({ error: "Missing required fields" }, 400);
   }
-  if (!["returned", "kept", "delete", "to_return", "undecided"].includes(action)) {
+  if (!["returned", "kept", "delete", "to_return", "undecided", "edit"].includes(action)) {
     return jsonResponse({ error: "Invalid action" }, 400);
   }
 
@@ -78,6 +89,39 @@ Deno.serve(async (req) => {
     if (error) {
       console.error("delete error", error);
       return jsonResponse({ error: "Database error" }, 500);
+    }
+    return jsonResponse({ ok: true });
+  }
+
+  if (action === "edit") {
+    const edits = body.edits ?? {};
+    const updates: Record<string, unknown> = {};
+    if (edits.item_name?.trim()) updates.item_name = edits.item_name.trim();
+    if (edits.retailer?.trim()) updates.retailer = edits.retailer.trim();
+    if (edits.order_total !== undefined) updates.order_total = edits.order_total.trim() || null;
+    if (edits.return_deadline) {
+      if (!ISO_DATE.test(edits.return_deadline)) {
+        return jsonResponse({ error: "return_deadline must be YYYY-MM-DD" }, 400);
+      }
+      updates.return_deadline = edits.return_deadline;
+    }
+    if (Object.keys(updates).length === 0) {
+      return jsonResponse({ error: "Nothing to edit" }, 400);
+    }
+
+    const { error } = await supabase.from("purchases").update(updates).eq("id", purchase_id);
+    if (error) {
+      console.error("edit error", error);
+      return jsonResponse({ error: "Database error" }, 500);
+    }
+
+    // A corrected deadline means the reminder schedule is wrong — rebuild
+    // it, but only for purchases that still need chasing.
+    if (
+      updates.return_deadline &&
+      ["pending", "confirmed", "to_return"].includes(purchase.status)
+    ) {
+      await scheduleReminders(supabase, purchase_id, updates.return_deadline as string);
     }
     return jsonResponse({ ok: true });
   }

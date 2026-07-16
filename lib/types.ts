@@ -7,7 +7,7 @@ export type PurchaseStatus =
   | "returned"
   | "kept";
 
-export type PurchaseSource = "forwarded" | "gmail";
+export type PurchaseSource = "forwarded" | "gmail" | "manual";
 
 export interface Purchase {
   id: string;

@@ -87,3 +87,33 @@ export function updateStatus(
     body: JSON.stringify({ email, token, purchase_id: purchaseId, action }),
   });
 }
+
+export interface PurchaseEdits {
+  item_name?: string;
+  retailer?: string;
+  order_total?: string;
+  return_deadline?: string;
+}
+
+export function editPurchase(
+  email: string,
+  token: string,
+  purchaseId: string,
+  edits: PurchaseEdits
+) {
+  return call<{ ok: true }>("update-status", {
+    method: "POST",
+    body: JSON.stringify({ email, token, purchase_id: purchaseId, action: "edit", edits }),
+  });
+}
+
+export function addPurchase(
+  email: string,
+  token: string,
+  fields: { item_name: string; retailer: string; return_deadline: string; order_total?: string }
+) {
+  return call<{ ok: true; purchase_id: string }>("add-purchase", {
+    method: "POST",
+    body: JSON.stringify({ email, token, ...fields }),
+  });
+}
