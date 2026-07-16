@@ -226,39 +226,44 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
     <div style={{ minHeight: "100vh", background: "#fbf1ef", fontFamily: SANS, color: "#2e2530" }}>
       <link rel="stylesheet" href={FONTS_URL} />
 
-      {/* TOP NAV BAR */}
-      <header style={{ borderBottom: "1px solid #f1e2e3" }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "16px 24px", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(140deg, #e8749a, #d94f7d)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(217,79,125,0.32)" }}>
-              <div style={{ width: 12, height: 12, border: "2.5px solid #fff", borderRadius: "50%", borderRightColor: "transparent" }} />
+      {/* TOP BAR */}
+      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, padding: "20px 40px", borderBottom: "1px solid #f1e2e3", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 30, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(140deg, #e8749a, #d94f7d)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 16px rgba(217,79,125,0.32)", flexShrink: 0 }}>
+              <div style={{ width: 13, height: 13, border: "2.5px solid #fff", borderRadius: "50%" }} />
             </div>
-            <span style={{ fontFamily: SERIF, fontSize: 23, letterSpacing: 0.2 }}>Retsy</span>
+            <span style={{ fontFamily: SERIF, fontSize: 22, letterSpacing: 0.2 }}>Retsy</span>
           </div>
 
-          <nav style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, flexWrap: "wrap" }}>
+          <nav style={{ display: "flex", alignItems: "center", gap: 26, flexWrap: "wrap" }}>
             {nav.map((n) => {
               const activeNav = view === n.key;
               return (
                 <div
                   key={n.key}
                   onClick={() => setView(n.key)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 16px", borderRadius: 22, fontSize: 14.5, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap", color: activeNav ? "#fff" : "#7d7078", background: activeNav ? "#d94f7d" : "transparent", boxShadow: activeNav ? "0 6px 16px rgba(217,79,125,0.25)" : "none" }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 4px", fontSize: 15, fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap", WebkitTextStroke: "0.3px currentColor", color: activeNav ? "#2e2530" : "#7d7078", background: activeNav ? "#fdeef3" : "transparent" }}
                 >
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: activeNav ? "#d94f7d" : "#e2d3d6", flexShrink: 0 }} />
                   {n.label}
-                  <span style={{ fontSize: 11.5, fontWeight: 800, color: activeNav ? "rgba(255,255,255,0.85)" : "#c2b4b9" }}>{n.count}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: activeNav ? "#d94f7d" : "#c2b4b9" }}>{n.count}</span>
                 </div>
               );
             })}
           </nav>
+        </div>
 
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <GmailConnect email={email} token={token} account={gmailAccount} onDisconnected={() => setGmailAccount(null)} />
-
-          <div title={email} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(140deg, #f7cdda, #e8749a)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 13, flexShrink: 0 }}>
-              {displayName.charAt(0)}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>{fullName || displayName}</div>
+          <div
+            onClick={() => setEditor({ mode: "add" })}
+            style={{ background: "#2e2530", color: "#fff", fontSize: 13, fontWeight: 700, padding: "10px 18px", borderRadius: 11, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            + Add purchase
+          </div>
+          <div title={`${fullName || displayName} · ${email}`} style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(140deg, #f7cdda, #e8749a)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 13, flexShrink: 0 }}>
+            {displayName.charAt(0)}
           </div>
         </div>
       </header>
@@ -298,12 +303,6 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
                 )}
               </h1>
               <p style={{ margin: "9px 0 0", fontSize: 15, color: "#7d7078" }}>{headerSub}</p>
-            </div>
-            <div
-              onClick={() => setEditor({ mode: "add" })}
-              style={{ background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontSize: 14, fontWeight: 700, padding: "12px 20px", borderRadius: 13, cursor: "pointer", boxShadow: "0 8px 20px rgba(217,79,125,0.3)", whiteSpace: "nowrap" }}
-            >
-              + Add purchase
             </div>
           </header>
 
@@ -352,35 +351,45 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
             </div>
           )}
 
-          {/* DASHBOARD VIEW: upcoming deadlines */}
+          {/* DASHBOARD VIEW: upcoming deadlines + purchases */}
           {view === "dashboard" && d.open.length > 0 && (
-            <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
-                <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 24, margin: 0 }}>Upcoming deadlines</h2>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "#b0a2a7" }}>Sort by</span>
-                  {(["date", "cost"] as const).map((k) => (
-                    <div
-                      key={k}
-                      onClick={() => setSort(k)}
-                      style={{ fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 20, cursor: "pointer", color: sort === k ? "#fff" : "#7d7078", background: sort === k ? "#d94f7d" : "#f6ecec", textTransform: "capitalize" }}
-                    >
-                      {k}
-                    </div>
-                  ))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+                  <h2 style={{ fontFamily: "Verdana", fontWeight: 400, fontSize: 24, margin: 0 }}>Upcoming deadlines</h2>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#b0a2a7" }}>Sort by</span>
+                    {(["date", "cost"] as const).map((k) => (
+                      <div
+                        key={k}
+                        onClick={() => setSort(k)}
+                        style={{ fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 20, cursor: "pointer", color: sort === k ? "#fff" : "#7d7078", background: sort === k ? "#d94f7d" : "#f6ecec", textTransform: "capitalize" }}
+                      >
+                        {k}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+                <DeadlinesTable rows={sortedDeadlines} busyId={busyId} act={act} />
               </div>
-              <PurchaseTable
-                rows={sortedDeadlines}
-                busyId={busyId}
-                act={act}
-                showDelete={false}
-                onEdit={(p) => setEditor({ mode: "edit", p })}
-              />
-              <p style={{ margin: "14px 8px 0", fontSize: 12, color: "#b0a2a7" }}>
-                Deadlines are estimates read from your emails and retailer policies —
-                occasionally we get one wrong. Click ✎ on any purchase to fix it.
-              </p>
+
+              <div style={{ background: "#fff", border: "1px solid #f1e2e3", borderRadius: 22, padding: "22px 24px", boxShadow: "0 10px 24px rgba(203,150,165,0.08)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <h2 style={{ fontFamily: "Verdana", fontWeight: 400, fontSize: 24, margin: 0 }}>Purchases</h2>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: "#9a8c92" }}>Awaiting decision · soonest first</span>
+                </div>
+                <PurchaseTable
+                  rows={d.open}
+                  busyId={busyId}
+                  act={act}
+                  showDelete
+                  onEdit={(p) => setEditor({ mode: "edit", p })}
+                />
+                <p style={{ margin: "14px 8px 0", fontSize: 12, color: "#b0a2a7" }}>
+                  Deadlines are estimates read from your emails and retailer policies —
+                  occasionally we get one wrong. Click ✎ on any purchase to fix it.
+                </p>
+              </div>
             </div>
           )}
 
@@ -545,6 +554,71 @@ const SELECT_VALUE: Record<Bucket, string> = {
   kept: "kept",
   missed: "undecided",
 };
+
+// Compact closing-soon table from the design: colored retailer, tight
+// columns, status select — no edit/delete (the Purchases panel has those).
+function DeadlinesTable({
+  rows,
+  busyId,
+  act,
+}: {
+  rows: { p: Purchase; bucket: Bucket; days: number }[];
+  busyId: string | null;
+  act: (id: string, a: StatusAction) => void;
+}) {
+  const grid = "minmax(110px,1.3fr) minmax(110px,1.6fr) minmax(64px,0.7fr) minmax(76px,0.7fr) minmax(128px,1fr)";
+
+  function onSelect(p: Purchase, value: string) {
+    if (value === "undecided") act(p.id, "undecided");
+    else if (value === "return") act(p.id, "to_return");
+    else if (value === "kept") act(p.id, "kept");
+    else if (value === "returned") act(p.id, "returned");
+  }
+
+  return (
+    <div style={{ width: "100%", overflowX: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: grid, gap: 8, minWidth: 500, padding: "0 8px 10px", fontSize: 11, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#b0a2a7" }}>
+        <div>Retailer</div>
+        <div>Item</div>
+        <div>Price</div>
+        <div>Days left</div>
+        <div>Action</div>
+      </div>
+      {rows.map(({ p, bucket, days }) => {
+        const s = scale(days, bucket);
+        return (
+          <div key={p.id} style={{ display: "grid", gridTemplateColumns: grid, gap: 8, minWidth: 500, alignItems: "center", padding: "12px 8px", borderTop: "1px solid #f6ecec", opacity: busyId === p.id ? 0.5 : 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 7, background: s.tint, color: s.color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>
+                {(p.retailer || "?").charAt(0).toUpperCase()}
+              </span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: s.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.retailer}</span>
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={p.item_name}>
+              {p.item_name}
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 700 }}>{p.order_total || "—"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{days}d</span>
+            </div>
+            <select
+              disabled={busyId === p.id}
+              value={SELECT_VALUE[bucket]}
+              onChange={(e) => onSelect(p, e.target.value)}
+              style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, border: "1px solid transparent", borderRadius: 10, padding: "6px 8px", cursor: "pointer", background: s.tint, color: s.color }}
+            >
+              <option value="undecided">Undecided</option>
+              <option value="return">To Return</option>
+              <option value="kept">Keep</option>
+              <option value="returned">Return Complete</option>
+            </select>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function RefundPill({ p }: { p: Purchase }) {
   if (p.refund_status === "received") {
