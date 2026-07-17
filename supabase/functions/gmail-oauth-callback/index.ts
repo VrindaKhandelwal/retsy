@@ -13,8 +13,10 @@ import { exchangeCode, parseIdTokenClaims } from "../_shared/gmail.ts";
 
 const APP_URL = Deno.env.get("APP_URL") ?? "https://app.retsy.xyz";
 const STATE_MAX_AGE_MS = 15 * 60 * 1000;
-// How far back the first sync looks for receipts.
-const INITIAL_LOOKBACK_DAYS = 60;
+// The first sync covers the most recent window immediately (live return
+// windows first); the older segment backfills afterwards.
+const PRIORITY_LOOKBACK_DAYS = 30;
+const DEEP_LOOKBACK_DAYS = 60;
 
 function redirect(location: string): Response {
   return new Response(null, { status: 302, headers: { Location: location } });
@@ -94,9 +96,9 @@ Deno.serve(async (req) => {
         .eq("id", user.id);
     }
 
-    const initialWatermark = new Date(
-      Date.now() - INITIAL_LOOKBACK_DAYS * 86_400_000
-    ).toISOString();
+    const now = Date.now();
+    const priorityStart = new Date(now - PRIORITY_LOOKBACK_DAYS * 86_400_000).toISOString();
+    const deepStart = new Date(now - DEEP_LOOKBACK_DAYS * 86_400_000).toISOString();
 
     const { error: upsertError } = await supabase
       .from("gmail_accounts")
@@ -106,10 +108,14 @@ Deno.serve(async (req) => {
           google_email: googleEmail,
           refresh_token: tokens.refresh_token,
           status: "active",
-          last_synced_at: initialWatermark,
+          // Phase 1 watermark: scan forward from 30 days ago right away.
+          last_synced_at: priorityStart,
+          // Phase 2 segment (days 30-60), backfilled once phase 1 is done.
+          backfill_until: deepStart,
+          backfill_before: priorityStart,
           last_sync_error: null,
-          // The 30-day backfill starts immediately; the dashboard shows a
-          // "still syncing" banner until gmail-sync clears this.
+          // The dashboard shows a "still syncing" banner until gmail-sync
+          // clears this.
           sync_backlog: true,
           updated_at: new Date().toISOString(),
         },

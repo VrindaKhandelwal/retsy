@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
 
   const { data: accounts, error: accountsError } = await supabase
     .from("gmail_accounts")
-    .select("id, user_id, google_email, refresh_token, last_synced_at, users!inner(email, dashboard_token)")
+    .select("id, user_id, google_email, refresh_token, last_synced_at, backfill_until, backfill_before, users!inner(email, dashboard_token)")
     .eq("status", "active")
     .limit(MAX_ACCOUNTS_PER_RUN);
 
@@ -132,40 +132,23 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const since = account.last_synced_at
-        ? new Date(new Date(account.last_synced_at).getTime() - WATERMARK_OVERLAP_MS)
-        : new Date(Date.now() - 60 * 86_400_000);
-      const afterEpoch = Math.floor(since.getTime() / 1000);
+      const epoch = (d: Date) => Math.floor(d.getTime() / 1000);
 
-      // category:purchases is Gmail's own receipt classifier — personal
-      // accounts only; Workspace inboxes would need a keyword query
-      // (documented follow-up, not built in V2).
-      const q = `category:purchases after:${afterEpoch}`;
-      // Gmail returns newest-first; process oldest-first so an order
-      // confirmation is inserted before its own delivery notification
-      // when both arrive in the same batch.
-      const messageIds = (
-        await listMessageIds(accessToken, q, MAX_LIST_IDS)
-      ).reverse();
-      scanned += messageIds.length;
-
-      // Filter out already-imported messages in one query.
-      let newIds = messageIds;
-      if (messageIds.length > 0) {
+      // List a window oldest-first, minus already-imported messages —
+      // ordering matters so an order confirmation is inserted before its
+      // own delivery/refund notification when both are in the window.
+      async function listNewIds(q: string): Promise<string[]> {
+        const messageIds = (await listMessageIds(accessToken, q, MAX_LIST_IDS)).reverse();
+        scanned += messageIds.length;
+        if (messageIds.length === 0) return [];
         const { data: seen } = await supabase
           .from("purchases")
           .select("gmail_message_id")
           .eq("user_id", account.user_id)
           .in("gmail_message_id", messageIds);
-        const seenSet = new Set((seen ?? []).map((r) => r.gmail_message_id));
-        newIds = messageIds.filter((id) => !seenSet.has(id));
+        const seenSet = new Set((seen ?? []).map((r: any) => r.gmail_message_id));
+        return messageIds.filter((id: string) => !seenSet.has(id));
       }
-
-      // Bound the expensive part; if there's more than one batch left, the
-      // watermark stays put so the next run continues where this one ends.
-      const windowComplete = newIds.length <= MAX_EXTRACTIONS_PER_RUN;
-      if (!windowComplete) hasBacklog = true;
-      newIds = newIds.slice(0, MAX_EXTRACTIONS_PER_RUN);
 
       const newPurchases: {
         retailer: string;
@@ -173,13 +156,12 @@ Deno.serve(async (req) => {
         orderTotal: string | null;
         returnDeadline: string;
       }[] = [];
-      let newestProcessedMs = 0;
 
-      // Phase 1: fetch + extract in parallel — the slow, stateless part
-      // (each message costs ~5s of Gmail + OpenAI latency; sequentially a
-      // 60-day backfill took ~25 minutes). Phase 2 below applies results
-      // strictly oldest-first, preserving order-confirmation-before-
-      // delivery/refund semantics.
+      // Process one bounded batch: fetch + extract in parallel (the slow,
+      // stateless part — ~5s of Gmail + OpenAI latency per message), then
+      // apply results strictly oldest-first. Returns the newest processed
+      // message timestamp for watermarking.
+      async function processIds(newIds: string[]): Promise<number> {
       const CONCURRENCY = 8;
       const fetched = new Map<
         string,
@@ -202,7 +184,9 @@ Deno.serve(async (req) => {
         Array.from({ length: Math.min(CONCURRENCY, newIds.length) }, extractWorker)
       );
 
-      // Phase 2: apply sequentially, oldest first.
+      let newestProcessedMs = 0;
+
+      // Apply sequentially, oldest first.
       for (const messageId of newIds) {
         const result = fetched.get(messageId);
         if (!result || "error" in result) {
@@ -321,6 +305,32 @@ Deno.serve(async (req) => {
           skipped++;
         }
       }
+      return newestProcessedMs;
+      } // end processIds
+
+      // ── Pass 1: forward window — last 30 days on a fresh connect, or
+      // everything since the last sync. These are the purchases with live
+      // return windows, so they land on the dashboard first.
+      const since = account.last_synced_at
+        ? new Date(new Date(account.last_synced_at).getTime() - WATERMARK_OVERLAP_MS)
+        : new Date(Date.now() - 30 * 86_400_000);
+      // category:purchases is Gmail's own receipt classifier — personal
+      // accounts only; Workspace inboxes would need a keyword query
+      // (documented follow-up, not built in V2).
+      const fwdIds = await listNewIds(`category:purchases after:${epoch(since)}`);
+      const fwdComplete = fwdIds.length <= MAX_EXTRACTIONS_PER_RUN;
+      const newestProcessedMs = await processIds(fwdIds.slice(0, MAX_EXTRACTIONS_PER_RUN));
+
+      // ── Pass 2: deep backfill (days 30-60), only once pass 1 is fully
+      // drained — history fills in behind the urgent stuff.
+      let deepPending = !!(account.backfill_until && account.backfill_before);
+      if (fwdComplete && deepPending) {
+        const qDeep = `category:purchases after:${epoch(new Date(account.backfill_until))} before:${epoch(new Date(account.backfill_before))}`;
+        const deepIds = await listNewIds(qDeep);
+        const deepComplete = deepIds.length <= MAX_EXTRACTIONS_PER_RUN;
+        await processIds(deepIds.slice(0, MAX_EXTRACTIONS_PER_RUN));
+        if (deepComplete) deepPending = false;
+      }
 
       if (newPurchases.length > 0 && userEmail) {
         await sendGmailDigestEmail({
@@ -330,12 +340,16 @@ Deno.serve(async (req) => {
         }).catch((e) => console.error("digest email failed", e));
       }
 
-      // Watermark: when the window is fully processed, advance to run start
-      // (not "now") so messages arriving mid-run land inside the next
-      // overlap window. On a partial (backlog) run, advance only to the
-      // newest message actually processed — we work oldest-first, so the
-      // next run picks up exactly where this one stopped.
-      const newWatermark = windowComplete
+      const allDone = fwdComplete && !deepPending;
+      if (!allDone) hasBacklog = true;
+
+      // Watermark (forward window only — the deep segment is tracked by
+      // backfill_until/before): when complete, advance to run start (not
+      // "now") so messages arriving mid-run land inside the next overlap
+      // window. On a partial run, advance only to the newest message
+      // actually processed — we work oldest-first, so the next run picks
+      // up exactly where this one stopped.
+      const newWatermark = fwdComplete
         ? runStart
         : newestProcessedMs > 0
           ? new Date(newestProcessedMs)
@@ -345,7 +359,9 @@ Deno.serve(async (req) => {
         .update({
           last_synced_at: newWatermark.toISOString(),
           last_sync_error: null,
-          sync_backlog: !windowComplete,
+          sync_backlog: !allDone,
+          backfill_until: deepPending ? account.backfill_until : null,
+          backfill_before: deepPending ? account.backfill_before : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", account.id);
