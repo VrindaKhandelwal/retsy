@@ -35,10 +35,10 @@ const MAX_ACCOUNTS_PER_RUN = 20;
 //
 // Batch size must leave the run finishing WELL inside the wall clock: a
 // killed run never fires its chain link, which strands the backfill until
-// the next cron ("scanning" banner stuck for hours). 20 extractions ≈ 1-2
-// minutes — safe margin.
+// the next cron ("scanning" banner stuck for hours). With extraction
+// parallelized (8 workers), 40 messages ≈ 30-45s — safe margin.
 const MAX_LIST_IDS = 500;
-const MAX_EXTRACTIONS_PER_RUN = 20;
+const MAX_EXTRACTIONS_PER_RUN = 40;
 const MIN_CONFIDENCE = 0.5;
 // Re-scan a little behind the watermark so messages that arrived while the
 // previous run was in flight aren't missed; dedupe absorbs the overlap.
@@ -175,14 +175,44 @@ Deno.serve(async (req) => {
       }[] = [];
       let newestProcessedMs = 0;
 
+      // Phase 1: fetch + extract in parallel — the slow, stateless part
+      // (each message costs ~5s of Gmail + OpenAI latency; sequentially a
+      // 60-day backfill took ~25 minutes). Phase 2 below applies results
+      // strictly oldest-first, preserving order-confirmation-before-
+      // delivery/refund semantics.
+      const CONCURRENCY = 8;
+      const fetched = new Map<
+        string,
+        { message: any; extracted: any } | { error: unknown }
+      >();
+      let cursor = 0;
+      async function extractWorker() {
+        while (cursor < newIds.length) {
+          const messageId = newIds[cursor++];
+          try {
+            const message = await getMessage(accessToken, messageId);
+            const extracted = await extractPurchaseFromEmail(message.text, message.from);
+            fetched.set(messageId, { message, extracted });
+          } catch (error) {
+            fetched.set(messageId, { error });
+          }
+        }
+      }
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, newIds.length) }, extractWorker)
+      );
+
+      // Phase 2: apply sequentially, oldest first.
       for (const messageId of newIds) {
+        const result = fetched.get(messageId);
+        if (!result || "error" in result) {
+          console.error(`failed to process message ${messageId}`, result && "error" in result ? result.error : "missing");
+          skipped++;
+          continue;
+        }
         try {
-          const message = await getMessage(accessToken, messageId);
+          const { message, extracted } = result;
           newestProcessedMs = Math.max(newestProcessedMs, message.internalDateMs);
-          const extracted = await extractPurchaseFromEmail(
-            message.text,
-            message.from
-          );
 
           // Delivery notifications don't create purchases — they update the
           // matching purchase's deadline to count from delivery, which is
