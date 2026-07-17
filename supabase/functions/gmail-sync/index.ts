@@ -32,8 +32,13 @@ const MAX_ACCOUNTS_PER_RUN = 20;
 // edge functions have a wall-clock limit. The watermark only advances once
 // the window is fully processed, so successive runs (or the daily cron)
 // chew through any backlog.
+//
+// Batch size must leave the run finishing WELL inside the wall clock: a
+// killed run never fires its chain link, which strands the backfill until
+// the next cron ("scanning" banner stuck for hours). 20 extractions ≈ 1-2
+// minutes — safe margin.
 const MAX_LIST_IDS = 500;
-const MAX_EXTRACTIONS_PER_RUN = 50;
+const MAX_EXTRACTIONS_PER_RUN = 20;
 const MIN_CONFIDENCE = 0.5;
 // Re-scan a little behind the watermark so messages that arrived while the
 // previous run was in flight aren't missed; dedupe absorbs the overlap.
@@ -51,8 +56,9 @@ function toIsoDate(d: Date): string {
 
 // A large backlog (e.g. first connect on a busy inbox) takes several runs
 // at MAX_EXTRACTIONS_PER_RUN each. Rather than waiting a day per batch on
-// the cron, a partial run re-triggers itself, up to this many chained runs.
-const MAX_CHAIN = 10;
+// the cron, a partial run re-triggers itself, up to this many chained runs
+// (25 × 20 covers the 500-id listing cap).
+const MAX_CHAIN = 25;
 
 Deno.serve(async (req) => {
   if (CRON_SECRET) {
