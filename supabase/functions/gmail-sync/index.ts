@@ -137,8 +137,19 @@ Deno.serve(async (req) => {
       // List a window oldest-first, minus already-imported messages —
       // ordering matters so an order confirmation is inserted before its
       // own delivery/refund notification when both are in the window.
+      // Consumer accounts with the category tabs disabled in Gmail settings
+      // get nothing from category:purchases; an empty category result falls
+      // back to the keyword net so those inboxes aren't silently skipped.
       async function listNewIds(q: string): Promise<string[]> {
-        const messageIds = (await listMessageIds(accessToken, q, MAX_LIST_IDS)).reverse();
+        let raw = await listMessageIds(accessToken, q, MAX_LIST_IDS);
+        if (raw.length === 0 && isConsumerGmail && q.startsWith("category:")) {
+          raw = await listMessageIds(
+            accessToken,
+            q.replace("category:purchases", KEYWORD_MATCHER),
+            MAX_LIST_IDS
+          );
+        }
+        const messageIds = raw.reverse();
         scanned += messageIds.length;
         if (messageIds.length === 0) return [];
         const { data: seen } = await supabase
@@ -313,10 +324,9 @@ Deno.serve(async (req) => {
       // domains) have no categories, so they get a keyword query instead.
       // It's noisier, but the extractor's email_type/is_returnable checks
       // do the actual filtering either way.
+      const KEYWORD_MATCHER = `subject:(order OR receipt OR "order confirmation" OR shipped OR delivered OR refund OR return)`;
       const isConsumerGmail = /@(gmail|googlemail)\.com$/i.test(account.google_email);
-      const matcher = isConsumerGmail
-        ? "category:purchases"
-        : `subject:(order OR receipt OR "order confirmation" OR shipped OR delivered OR refund OR return)`;
+      const matcher = isConsumerGmail ? "category:purchases" : KEYWORD_MATCHER;
 
       // ── Pass 1: forward window — last 30 days on a fresh connect, or
       // everything since the last sync. These are the purchases with live
@@ -381,10 +391,17 @@ Deno.serve(async (req) => {
         .eq("id", account.id);
     } catch (err) {
       console.error(`sync failed for account ${account.id}`, err);
+      const msg = String(err);
+      // A token that authenticates but lacks the Gmail scope fails 403 on
+      // every run, forever — without flagging it, the dashboard says
+      // "connected" while nothing ever scans. Flip it to error so the
+      // Reconnect button appears. Transient failures just record the error.
+      const scopeBroken = /insufficient.*scopes|insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(msg);
       await supabase
         .from("gmail_accounts")
         .update({
-          last_sync_error: String(err),
+          ...(scopeBroken ? { status: "error" } : {}),
+          last_sync_error: msg,
           updated_at: new Date().toISOString(),
         })
         .eq("id", account.id);
