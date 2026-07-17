@@ -308,28 +308,42 @@ Deno.serve(async (req) => {
       return newestProcessedMs;
       } // end processIds
 
+      // category:purchases is Gmail's own receipt classifier, but it only
+      // exists on consumer Gmail — Google Workspace inboxes (custom
+      // domains) have no categories, so they get a keyword query instead.
+      // It's noisier, but the extractor's email_type/is_returnable checks
+      // do the actual filtering either way.
+      const isConsumerGmail = /@(gmail|googlemail)\.com$/i.test(account.google_email);
+      const matcher = isConsumerGmail
+        ? "category:purchases"
+        : `subject:(order OR receipt OR "order confirmation" OR shipped OR delivered OR refund OR return)`;
+
       // ── Pass 1: forward window — last 30 days on a fresh connect, or
       // everything since the last sync. These are the purchases with live
       // return windows, so they land on the dashboard first.
       const since = account.last_synced_at
         ? new Date(new Date(account.last_synced_at).getTime() - WATERMARK_OVERLAP_MS)
         : new Date(Date.now() - 30 * 86_400_000);
-      // category:purchases is Gmail's own receipt classifier — personal
-      // accounts only; Workspace inboxes would need a keyword query
-      // (documented follow-up, not built in V2).
-      const fwdIds = await listNewIds(`category:purchases after:${epoch(since)}`);
+      const fwdIds = await listNewIds(`${matcher} after:${epoch(since)}`);
       const fwdComplete = fwdIds.length <= MAX_EXTRACTIONS_PER_RUN;
       const newestProcessedMs = await processIds(fwdIds.slice(0, MAX_EXTRACTIONS_PER_RUN));
 
       // ── Pass 2: deep backfill (days 30-60), only once pass 1 is fully
-      // drained — history fills in behind the urgent stuff.
+      // drained — history fills in behind the urgent stuff. backfill_until
+      // is the segment's advancing cursor: skipped messages never enter the
+      // purchases table, so the seen-filter alone can't mark progress and
+      // would re-extract the same skippables forever.
       let deepPending = !!(account.backfill_until && account.backfill_before);
       if (fwdComplete && deepPending) {
-        const qDeep = `category:purchases after:${epoch(new Date(account.backfill_until))} before:${epoch(new Date(account.backfill_before))}`;
+        const qDeep = `${matcher} after:${epoch(new Date(account.backfill_until))} before:${epoch(new Date(account.backfill_before))}`;
         const deepIds = await listNewIds(qDeep);
         const deepComplete = deepIds.length <= MAX_EXTRACTIONS_PER_RUN;
-        await processIds(deepIds.slice(0, MAX_EXTRACTIONS_PER_RUN));
-        if (deepComplete) deepPending = false;
+        const deepNewestMs = await processIds(deepIds.slice(0, MAX_EXTRACTIONS_PER_RUN));
+        if (deepComplete) {
+          deepPending = false;
+        } else if (deepNewestMs > 0) {
+          account.backfill_until = new Date(deepNewestMs).toISOString();
+        }
       }
 
       if (newPurchases.length > 0 && userEmail) {
