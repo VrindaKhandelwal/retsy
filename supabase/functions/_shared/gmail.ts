@@ -55,6 +55,9 @@ export async function exchangeCode(code: string): Promise<{
   refresh_token: string;
   access_token: string;
   id_token: string;
+  // Space-separated scopes the user actually granted — granular consent
+  // means checkboxes can be left unchecked, so never assume.
+  scope?: string;
 }> {
   const { clientId, clientSecret } = getClientCredentials();
   const res = await fetch(OAUTH_TOKEN_URL, {

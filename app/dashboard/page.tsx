@@ -59,11 +59,12 @@ function DashboardPageInner() {
   const email = searchParams.get("email") || "";
   const token = searchParams.get("token") || "";
   const gmailFlag = searchParams.get("gmail");
+  const gmailReason = searchParams.get("reason");
 
   if (!email || !token) {
     return <RequestLinkScreen />;
   }
-  return <Dashboard email={email} token={token} gmailFlag={gmailFlag} />;
+  return <Dashboard email={email} token={token} gmailFlag={gmailFlag} gmailReason={gmailReason} />;
 }
 
 function RequestLinkScreen() {
@@ -120,7 +121,17 @@ function RequestLinkScreen() {
 
 type View = "dashboard" | "all" | "kept" | "returns" | "analytics";
 
-function Dashboard({ email, token, gmailFlag }: { email: string; token: string; gmailFlag: string | null }) {
+function Dashboard({
+  email,
+  token,
+  gmailFlag,
+  gmailReason,
+}: {
+  email: string;
+  token: string;
+  gmailFlag: string | null;
+  gmailReason: string | null;
+}) {
   const router = useRouter();
   const { purchases, gmailAccount, setGmailAccount, fullName, loadError, busyId, act, refresh } =
     useDashboardData(email, token);
@@ -130,6 +141,8 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
   const [banner, setBanner] = useState<"connected" | "error" | null>(
     gmailFlag === "connected" || gmailFlag === "error" ? gmailFlag : null
   );
+  const [bannerReason] = useState(gmailReason);
+  const missedPermission = banner === "error" && bannerReason === "inbox_permission";
 
   useEffect(() => {
     if (gmailFlag) {
@@ -288,7 +301,23 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           )}
-          {banner === "error" && (
+          {banner === "error" && missedPermission && (
+            <div style={{ marginBottom: 18, background: "#fdeaf1", borderRadius: 14, padding: "14px 18px" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#d94f7d" }}>
+                One checkbox got missed on Google&apos;s screen
+              </div>
+              <div style={{ fontSize: 13, color: "#a8506e", marginTop: 4, lineHeight: 1.5 }}>
+                Reading your receipts is how Retsy works — hit{" "}
+                <span onClick={() => (window.location.href = gmailConnectUrl(email, token))} style={{ fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}>
+                  Connect Gmail
+                </span>{" "}
+                again and make sure the box for{" "}
+                <strong>&quot;View your email messages and settings&quot;</strong> is checked
+                before you press Continue.
+              </div>
+            </div>
+          )}
+          {banner === "error" && !missedPermission && (
             <div style={{ marginBottom: 18, background: "#fdeaf1", color: "#d94f7d", borderRadius: 14, padding: "12px 18px", fontSize: 13.5, fontWeight: 600 }}>
               Couldn&apos;t connect Gmail — please try again.
             </div>
@@ -346,12 +375,19 @@ function Dashboard({ email, token, gmailFlag }: { email: string; token: string; 
                   Gmail connected — your receipts will appear after the next scan
                 </div>
               ) : (
-                <div
-                  onClick={() => (window.location.href = gmailConnectUrl(email, token))}
-                  style={{ display: "inline-block", marginTop: 26, background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontSize: 15.5, fontWeight: 800, padding: "15px 34px", borderRadius: 14, cursor: "pointer", boxShadow: "0 10px 26px rgba(217,79,125,0.35)" }}
-                >
-                  Connect Gmail
-                </div>
+                <>
+                  <div
+                    onClick={() => (window.location.href = gmailConnectUrl(email, token))}
+                    style={{ display: "inline-block", marginTop: 26, background: "linear-gradient(140deg, #e8749a, #d94f7d)", color: "#fff", fontSize: 15.5, fontWeight: 800, padding: "15px 34px", borderRadius: 14, cursor: "pointer", boxShadow: "0 10px 26px rgba(217,79,125,0.35)" }}
+                  >
+                    Connect Gmail
+                  </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: "#a8506e", marginTop: 14, maxWidth: 400, marginLeft: "auto", marginRight: "auto" }}>
+                    On Google&apos;s screen, keep the box for{" "}
+                    <strong>&quot;View your email messages&quot;</strong> checked — that&apos;s
+                    how we find your receipts.
+                  </div>
+                </>
               )}
               <div style={{ fontSize: 13, color: "#a99ba0", marginTop: 18 }}>
                 Prefer not to link your inbox? Forward any order confirmation to{" "}

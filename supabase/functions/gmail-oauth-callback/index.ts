@@ -85,6 +85,16 @@ Deno.serve(async (req) => {
 
   try {
     const tokens = await exchangeCode(code);
+
+    // Granular consent lets users continue without checking the inbox
+    // permission — the one Retsy actually needs. Catch it here with a
+    // specific reason instead of failing 403 on every sync forever.
+    if (!(tokens.scope ?? "").includes("gmail.readonly")) {
+      return redirect(
+        dashboardUrl(user.email, user.dashboard_token, "error", "inbox_permission")
+      );
+    }
+
     const claims = parseIdTokenClaims(tokens.id_token);
     const googleEmail = claims.email;
 
